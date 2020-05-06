@@ -21,11 +21,11 @@ class ModelEmbedding(nn.Module):
         self.vocab_size = vocab_size
         self.embedding = nn.Embedding(self.vocab_size, self.embed_size)
 
-    def forward(self, input):
+    def forward(self, inputs):
         '''
-        @param input (Tensor):  often of shape (batch_size, sentence_length)
+        @param inputs (Tensor):  often of shape (batch_size, sentence_length)
         Returns output: (Tensor): (batch_size, sentence_length, embed_size)
         '''
-        input_embed = self.embedding(input)
+        input_embed = self.embedding(inputs)
         output = input_embed * math.sqrt(self.embed_size)
         return output

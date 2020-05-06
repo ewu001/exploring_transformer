@@ -15,11 +15,11 @@ class Generator(nn.Module):
         self.vocab_size = vocab_size
         self.target_vocab_projection = torch.nn.Linear(dim_model, vocab_size)
 
-    def forward(self, input):
+    def forward(self, inputs):
         '''
         Linear projection of decoder output, followed by log softmax to output probability distribution
-        @param input (Tensor): (batch_size, sentence_length, hidden_size)
+        @param inputs (Tensor): (batch_size, sentence_length, hidden_size)
         '''
-        linear_output = self.target_vocab_projection(input)
+        linear_output = self.target_vocab_projection(inputs)
         softmax_output = torch.nn.functional.log_softmax(linear_output, dim=-1)
         return softmax_output
