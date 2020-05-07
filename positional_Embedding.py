@@ -38,10 +38,14 @@ class PositionalEmbedding(nn.Module):
 
     def forward(self, inputs):
         '''
-        @param input (Tensor): the output of the embedding projection of input sentence
+        @param input (Tensor): (batch_size, sentence_length, embed_size)
+        the output of the embedding projection of input sentence
 
         returns the concatenated output between input embedding and position embedding
         '''
         length = inputs.size(1)
-        output = inputs + torch.Tensor(self.positional_encoding[:, length])
+        # Increase input embedding value to make positional embedding value relatively small
+        # To preserve valuable information from input embedding space while still concat positional embedding
+        inputs = inputs * math.sqrt(self.embed_size)
+        output = inputs + torch.Tensor(self.positional_encoding[:, :length])
         return output

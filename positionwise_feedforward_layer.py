@@ -13,6 +13,9 @@ class PositionWiseFeedForward(nn.Module):
         self.w2_projection = nn.Linear(self.d_ff, self.embed_size, bias=True)
 
     def forward(self, inputs):
+        '''
+        returns Tensor of (batch_size, sentence_length, embed_size)
+        '''
         inner_output = torch.nn.functional.relu(self.w1_projection(inputs))
         output = self.w2_projection(inner_output)
         return output
