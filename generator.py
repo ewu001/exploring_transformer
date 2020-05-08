@@ -19,7 +19,9 @@ class Generator(nn.Module):
         '''
         Linear projection of decoder output, followed by log softmax to output probability distribution
         @param inputs (Tensor): (batch_size, sentence_length, hidden_size)
+
+        We could perform the softmax on linear output however this will be taken care of by the pytorch loss function
         '''
         linear_output = self.target_vocab_projection(inputs)
-        softmax_output = torch.nn.functional.log_softmax(linear_output, dim=-1)
-        return softmax_output
+        #softmax_output = torch.nn.functional.log_softmax(linear_output, dim=-1)
+        return linear_output
