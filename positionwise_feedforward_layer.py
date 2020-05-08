@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn 
 
 class PositionWiseFeedForward(nn.Module):
-    def __init__(self, embed_size, d_ff):
+    def __init__(self, embed_size, d_ff=2048):
         '''
         Based on the paper, embed_size = 512 and d_ff = 2048
         '''

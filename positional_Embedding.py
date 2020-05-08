@@ -39,7 +39,7 @@ class PositionalEmbedding(nn.Module):
     def forward(self, inputs):
         '''
         @param input (Tensor): (batch_size, sentence_length, embed_size)
-        the output of the embedding projection of input sentence
+        Input to positional embedding is the output of the embedding projection of input sentence
 
         returns the concatenated output between input embedding and position embedding
         '''
