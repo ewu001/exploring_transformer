@@ -1,12 +1,15 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import sys
 
 from Transformer_model.encoder import Encoder
 from Transformer_model.decoder import Decoder
 from Transformer_model.generator import Generator
 
 from utility import generate_src_masks, generate_tgt_masks
+from collections import namedtuple
+Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
 class Transformer(nn.Module):
     '''
@@ -49,5 +52,33 @@ class Transformer(nn.Module):
         target_gold_words_log_prob = torch.gather(output, index=target_padded.unsqueeze(-1), dim=-1)
         scores = target_gold_words_log_prob.sum(dim=0)
         return scores
+
+
+    def save(self, path: str):
+        """ Save the trained model to a file at specified path location.
+        @param path (str): path to the model
+        """
+        print('save model parameters to [%s]' % path, file=sys.stderr)
+
+        params = {
+            'args': dict(embed_size=self.dim_model, n_head=self.n_heads, device=self.device, num_layer=self.number_layer),
+            'vocab': self.vocab,
+            'state_dict': self.state_dict()
+        }
+
+        torch.save(params, path)
+
+
+    @staticmethod
+    def load(model_path: str):
+        """ Load the model file from specified path.
+        @param model_path (str): path to model
+        """
+        params = torch.load(model_path, map_location=lambda storage, loc: storage)
+        args = params['args']
+        model = Transformer(vocab=params['vocab'], **args)
+        model.load_state_dict(params['state_dict'])
+
+        return model
 
 

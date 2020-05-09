@@ -49,7 +49,7 @@ class PositionalEmbedding(nn.Module):
         # To preserve valuable information from input embedding space while still concat positional embedding
         inputs = inputs * math.sqrt(self.embed_size)
 
-        output = inputs + torch.Tensor(self.positional_encoding[:, :length]).cuda()
+        #output = inputs + torch.Tensor(self.positional_encoding[:, :length]).cuda() # for GPU
 
-        #output = inputs + torch.Tensor(self.positional_encoding[:, :length]) for CPU
+        output = inputs + torch.Tensor(self.positional_encoding[:, :length])  #for CPU
         return output
