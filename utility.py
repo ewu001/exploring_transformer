@@ -56,6 +56,7 @@ def batch_iter(data, batch_size, shuffle=False):
     @param batch_size (int): batch size
     @param shuffle (boolean): whether to randomly shuffle the dataset
     """
+
     batch_num = math.ceil(len(data) / batch_size)
     index_array = list(range(len(data)))
 
@@ -65,7 +66,6 @@ def batch_iter(data, batch_size, shuffle=False):
     for i in range(batch_num):
         indices = index_array[i * batch_size: (i + 1) * batch_size]
         examples = [data[idx] for idx in indices]
-
         examples = sorted(examples, key=lambda e: len(e[0]), reverse=True)
         src_sents = [e[0] for e in examples]
         tgt_sents = [e[1] for e in examples]
@@ -77,14 +77,18 @@ def generate_src_masks(source_padded, pad):
     @param source_padded (Tensor): encodings of shape (b, src_len, 2*h), where b = batch size,
                                     src_len = max source length, h = hidden size. 
     """
-    source_msk = (source_padded != pad).unsqueeze(1)
+    source_msk = (source_padded != pad).unsqueeze(-2)
     return source_msk
 
 def generate_tgt_masks(target_padded, pad):
     "Create a mask to hide padding and future words."
     target_msk = (target_padded != pad).unsqueeze(1)
     size = target_padded.size(1) # get seq_len for matrix
-    nopeak_mask = np.triu(np.ones(1, size, size),k=1).astype('uint8')
-    nopeak_mask = torch.Tensor(torch.from_numpy(nopeak_mask) == 0)
+
+    nopeak_mask = np.triu(np.ones((1, size, size)), k=1).astype('uint8')
+    # Uncomment this if training in GPU is available
+    #nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0).cuda()
+    nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0)
+
     target_mask = target_msk & nopeak_mask
     return target_mask

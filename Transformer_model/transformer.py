@@ -22,28 +22,31 @@ class Transformer(nn.Module):
         self.dim_model = dim_model
         self.n_heads = n_heads
         self.number_layer = N
+        # Hardcode device to CPU for now
+        self.device = torch.device('cpu')
 
         self.encoder = Encoder(self.dim_model, len(self.vocab.src), self.number_layer)
         self.decoder = Decoder(self.dim_model, len(self.vocab.tgt), self.number_layer)
         self.generator = Generator(self.dim_model, len(self.vocab.tgt))
 
     def forward(self, src, tgt):
-        # Convert list of lists into tensors
-        source_padded = self.vocab.src.to_input_tensor(src, device=self.device)   # Tensor: (batch_size, sen_len)
-        src_mask = generate_src_masks(source_padded, self.vocab.src['<pad>'])
-        
-        target_padded = self.vocab.tgt.to_input_tensor(tgt, device=self.device)   # Tensor: (batch_size, sen_len)
-        tgt_mask = generate_tgt_masks(target_padded, self.vocab.tgt['<pad>'])
 
-        encoder_output = self.encoder(src, src_mask)
-        decoder_output = self.decoder(tgt, encoder_output, src_mask, tgt_mask)
-        output = self.generator(decoder_output)
+        # Convert list of lists into tensors
+        source_padded = self.vocab.src.to_input_tensor(src, device=self.device)   # Tensor: (sen_len, batch_size )
+        source_padded = source_padded.permute(1, 0)
+        src_mask = generate_src_masks(source_padded, self.vocab.src['<pad>'])
+        target_padded = self.vocab.tgt.to_input_tensor(tgt, device=self.device)   # Tensor: (sen_len, batch_size)
+        target_padded = target_padded.permute(1, 0)
+        tgt_mask = generate_tgt_masks(target_padded, self.vocab.tgt['<pad>'])
+        encoder_output = self.encoder(source_padded, src_mask) # Tensor: (batch_size, src_len, dim_model)
+        decoder_output = self.decoder(target_padded, encoder_output, src_mask, tgt_mask)
+        output = self.generator(decoder_output)  # Tensor (batch size, tgt_length, tgt_vocab_size)
 
         # Zero out, probabilities for which we have nothing in the target text
-        target_masks = (target_padded != self.vocab.tgt['<pad>']).float()
+        #target_masks = (target_padded != self.vocab.tgt['<pad>']).float()
         
         # Compute log probability of generating true target words
-        target_gold_words_log_prob = torch.gather(output, index=target_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_masks[1:]
+        target_gold_words_log_prob = torch.gather(output, index=target_padded.unsqueeze(-1), dim=-1)
         scores = target_gold_words_log_prob.sum(dim=0)
         return scores
 

@@ -14,7 +14,7 @@ class MultiheadAttention(nn.Module):
         super(MultiheadAttention, self).__init__()
         self.dim_model = dim_model
         self.num_head = num_head
-        self.dim_k = self.dim_model / self.num_head
+        self.dim_k = int(self.dim_model / self.num_head)
         self.value_projection = nn.Linear(self.dim_model, self.dim_model)
         self.key_projection = nn.Linear(self.dim_model, self.dim_model)
         self.query_projection = nn.Linear(self.dim_model, self.dim_model)
@@ -25,6 +25,7 @@ class MultiheadAttention(nn.Module):
         '''
         @param query, key, value (Tensor): (batch_size, sentence_length, dim_model)
         Perform linear projection on query, key, value separately
+        
         Split into number of heads
         Send to scaled dot product attention for score
         Concatenate the number of heads together
@@ -60,9 +61,11 @@ class MultiheadAttention(nn.Module):
         Return attention head (Tensor): (batch_size, N_head, sentence_length, dim_k)
         '''
         dim_k = query.size(-1)
-        scores = torch.bmm(query, key.permute(0, 1, 3, 2)) / math.sqrt(dim_k)
+        scores = torch.matmul(query, key.permute(0, 1, 3, 2)) / math.sqrt(dim_k)
+
         if mask is not None:
-            scores = scores.masked_fill(mask==0, 1e-8)
+            mask = mask.unsqueeze(1)
+            scores = scores.masked_fill(mask==0, -1e9)
         # softmax at the sentence_length level
         scores_distribution = torch.nn.functional.softmax(scores, dim=-1)
         attention_head = torch.matmul(scores_distribution, value)

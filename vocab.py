@@ -23,7 +23,7 @@ import json
 import torch
 from typing import List
 from utility import read_corpus, pad_sents
-
+import numpy as np
 
 class VocabEntry(object):
     """ Vocabulary Entry, i.e. structure containing either
@@ -122,10 +122,12 @@ class VocabEntry(object):
 
         @returns sents_var: tensor of (max_sentence_length, batch_size)
         """
+
         word_ids = self.words2indices(sents)
         sents_t = pad_sents(word_ids, self['<pad>'])
         sents_var = torch.tensor(sents_t, dtype=torch.long, device=device)
-        return sents_var
+
+        return torch.t(sents_var)
 
     @staticmethod
     def from_corpus(corpus, size, freq_cutoff=2):

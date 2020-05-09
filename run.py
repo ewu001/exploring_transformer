@@ -115,7 +115,8 @@ def train(args: Dict):
     train_data = list(zip(train_data_src, train_data_tgt))
     dev_data = list(zip(dev_data_src, dev_data_tgt))
 
-    train_batch_size = int(args['--batch-size'])
+    #train_batch_size = int(args['--batch-size'])
+    train_batch_size = 4
     clip_grad = float(args['--clip-grad'])
     valid_niter = int(args['--valid-niter'])
     log_every = int(args['--log-every'])
@@ -354,7 +355,6 @@ def main():
     np.random.seed(seed * 13 // 7)
 
     if args['train']:
-        print("i got here")
         train(args)
     elif args['decode']:
         decode(args)

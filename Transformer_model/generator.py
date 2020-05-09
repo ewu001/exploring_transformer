@@ -13,7 +13,7 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         self.dim_model = dim_model
         self.vocab_size = vocab_size
-        self.target_vocab_projection = torch.nn.Linear(dim_model, vocab_size)
+        self.target_vocab_projection = torch.nn.Linear(self.dim_model, self.vocab_size)
 
     def forward(self, inputs):
         '''
