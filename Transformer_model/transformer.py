@@ -16,14 +16,14 @@ class Transformer(nn.Module):
     Decoder takes encoder input, generates output at each step via auto-regressive pattern
     Generator includes a linear projection of decoder output and map to softmax regression for output probability distribution
     '''
-    def __init__(self, vocab, dim_model, n_heads, N=6):
+    def __init__(self, vocab, dim_model, n_heads, device, N=6):
         super(Transformer, self).__init__()
         self.vocab = vocab
         self.dim_model = dim_model
         self.n_heads = n_heads
         self.number_layer = N
         # Hardcode device to CPU for now
-        self.device = torch.device('cpu')
+        self.device = device
 
         self.encoder = Encoder(self.dim_model, len(self.vocab.src), self.number_layer)
         self.decoder = Decoder(self.dim_model, len(self.vocab.tgt), self.number_layer)

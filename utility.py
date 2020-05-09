@@ -4,7 +4,7 @@ import copy
 import nltk
 import math
 import numpy as np
-nltk.download('punkt')
+#nltk.download('punkt')
 
 # Build a convenient cloning function that can generate multiple encoder or decoder layers:
 def get_clones(module, N):
@@ -87,8 +87,10 @@ def generate_tgt_masks(target_padded, pad):
 
     nopeak_mask = np.triu(np.ones((1, size, size)), k=1).astype('uint8')
     # Uncomment this if training in GPU is available
-    #nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0).cuda()
-    nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0)
+    nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0).cuda()
+
+    # Uncomment this if training is in CPU only
+    #nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0)
 
     target_mask = target_msk & nopeak_mask
     return target_mask

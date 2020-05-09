@@ -116,7 +116,7 @@ def train(args: Dict):
     dev_data = list(zip(dev_data_src, dev_data_tgt))
 
     #train_batch_size = int(args['--batch-size'])
-    train_batch_size = 4
+    train_batch_size = 1
     clip_grad = float(args['--clip-grad'])
     valid_niter = int(args['--valid-niter'])
     log_every = int(args['--log-every'])
@@ -125,7 +125,10 @@ def train(args: Dict):
     maxEpoch = int(args['--max-epoch'])
     vocab = Vocab.load(args['--vocab'])
 
-    model = Transformer(vocab=vocab, dim_model=512, n_heads=8)
+    device = torch.device("cuda:0" if args['--cuda'] else "cpu")
+    print('use device: %s' % device, file=sys.stderr)
+
+    model = Transformer(vocab=vocab, dim_model=512, device=device, n_heads=8)
 
     model.train()
 
@@ -137,9 +140,6 @@ def train(args: Dict):
 
     #vocab_mask = torch.ones(len(vocab.tgt))
     #vocab_mask[vocab.tgt['<pad>']] = 0
-
-    device = torch.device("cuda:0" if args['--cuda'] else "cpu")
-    print('use device: %s' % device, file=sys.stderr)
 
     model = model.to(device)
 
