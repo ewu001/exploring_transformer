@@ -25,7 +25,7 @@ class Transformer(nn.Module):
 
         self.encoder = Encoder(self.dim_model, len(self.vocab.src), self.number_layer)
         self.decoder = Decoder(self.dim_model, len(self.vocab.tgt), self.number_layer)
-        self.generator = Generator(self.dim_model, self.tgt_vocab)
+        self.generator = Generator(self.dim_model, len(self.vocab.tgt))
 
     def forward(self, src, tgt):
         # Convert list of lists into tensors

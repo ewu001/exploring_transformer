@@ -18,6 +18,7 @@ class PositionalEmbedding(nn.Module):
         @param embed_size (int)
         @param max_length (int)
         '''
+        super(PositionalEmbedding, self).__init__()
         self.embed_size = embed_size
         self.max_length = max_length
         self.positional_encoding = self.get_positional_encoding()
