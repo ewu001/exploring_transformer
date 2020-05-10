@@ -50,6 +50,5 @@ class PositionalEmbedding(nn.Module):
         inputs = inputs * math.sqrt(self.embed_size)
 
         #output = inputs + torch.Tensor(self.positional_encoding[:, :length]).cuda() # for GPU
-
         output = inputs + torch.Tensor(self.positional_encoding[:, :length])  #for CPU
         return output

@@ -34,6 +34,7 @@ class Encoder(nn.Module):
         This forward will take care of the entire transformer encoder's computation
         Input sequence first go through embedding projection, followed by positional embedding concatenation
         Then go into each of the encoder layer based on number of encoder
+        @param src (Tensor): (batch_size, sentence_length)
         '''
         embed_input = self.input_embedding(src)
         x = self.position_embedding(embed_input)

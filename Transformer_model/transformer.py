@@ -61,7 +61,7 @@ class Transformer(nn.Module):
         print('save model parameters to [%s]' % path, file=sys.stderr)
 
         params = {
-            'args': dict(embed_size=self.dim_model, n_head=self.n_heads, device=self.device, num_layer=self.number_layer),
+            'args': dict(dim_model=self.dim_model, n_heads=self.n_heads, device=self.device, N=self.number_layer),
             'vocab': self.vocab,
             'state_dict': self.state_dict()
         }
@@ -81,4 +81,40 @@ class Transformer(nn.Module):
 
         return model
 
+
+    def greedy_decoding(self, src_sent, max_decoding_time_step):
+        '''
+        Greedy decode implementation
+        @param src_sent: lis[str], one sentence to decide
+        '''
+        #src_mask = (src_sent != input_pad).unsqueeze(-2)
+        word_ids = self.vocab.src.words2indices(src_sent)   
+        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(0) # Tensor: (batch_size, sent_length )
+
+        #print(source_tensor.shape)
+        enc_outputs = self.encoder(source_tensor, None)
+    
+        #outputs = torch.zeros(max_decoding_time_step)
+        target_output = [0 for i in range(max_decoding_time_step)]
+        target_output[0] = self.vocab.tgt.word2id['<s>']
+        for i in range(1, max_decoding_time_step):    
+            
+            tgt_mask = np.triu(np.ones((1, i, i)),k=1).astype('uint8')
+            #trg_mask= torch.autograd.Variable(torch.from_numpy(trg_mask) == 0).cuda()  # For GPU
+            tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0)  # For CPU
+            current_output = target_output[:i]
+            tgt_word_ids = self.vocab.src.words2indices(current_output)   
+            target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device).unsqueeze(0) 
+            
+            #print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
+            decoder_output = self.decoder(target_tensor, enc_outputs, None, tgt_mask)
+            output = self.generator(decoder_output)
+            out = torch.nn.functional.softmax(output, dim=-1)
+            _, ix = out[:, -1].data.topk(1)
+
+            target_output[i] = ix[0][0].item()
+            if ix[0][0] == self.vocab.tgt.word2id['</s>']:
+                break
+
+        return [self.vocab.tgt.id2word[ix] for ix in target_output if target_output[ix] not in [1, 0]]
 

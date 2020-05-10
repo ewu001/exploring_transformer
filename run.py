@@ -118,7 +118,7 @@ def train(args: Dict):
     #train_batch_size = int(args['--batch-size'])
     #valid_niter = int(args['--valid-niter'])
     train_batch_size = 1
-    valid_niter = 2000
+    valid_niter = 200
     clip_grad = float(args['--clip-grad'])
     log_every = int(args['--log-every'])
     model_save_path = args['--save-to']
@@ -329,8 +329,8 @@ def beam_search(model: Transformer, test_data_src: List[List[str]], beam_size: i
     hypotheses = []
     with torch.no_grad():
         for src_sent in tqdm(test_data_src, desc='Decoding', file=sys.stdout):
-            example_hyps = model.beam_search(src_sent, beam_size=beam_size, max_decoding_time_step=max_decoding_time_step)
-
+            #example_hyps = model.beam_search(src_sent, beam_size=beam_size, max_decoding_time_step=max_decoding_time_step)
+            example_hyps = model.greedy_decoding(src_sent, max_decoding_time_step=max_decoding_time_step)
             hypotheses.append(example_hyps)
 
     if was_training: model.train(was_training)
