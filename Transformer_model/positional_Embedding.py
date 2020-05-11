@@ -48,7 +48,8 @@ class PositionalEmbedding(nn.Module):
         # Increase input embedding value to make positional embedding value relatively small
         # To preserve valuable information from input embedding space while still concat positional embedding
         inputs = inputs * math.sqrt(self.embed_size)
-
-        #output = inputs + torch.Tensor(self.positional_encoding[:, :length]).cuda() # for GPU
-        output = inputs + torch.Tensor(self.positional_encoding[:, :length])  #for CPU
+        if torch.cuda.is_available():
+            output = inputs + torch.Tensor(self.positional_encoding[:, :length]).cuda() # for GPU
+        else:
+            output = inputs + torch.Tensor(self.positional_encoding[:, :length])  #for CPU
         return output

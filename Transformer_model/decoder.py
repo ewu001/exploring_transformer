@@ -67,7 +67,9 @@ class DecoderLayer(nn.Module):
 
         self.layerNorm_1 = LayerNormalization(self.dim_model)
         self.layerNorm_2 = LayerNormalization(self.dim_model)  
-        self.layerNorm_3 = LayerNormalization(self.dim_model)  
+        self.layerNorm_3 = LayerNormalization(self.dim_model)
+
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, x, encoder_output, tgt_mask, src_mask):
         '''
@@ -85,5 +87,5 @@ class DecoderLayer(nn.Module):
         self_attention = self.multiheadAttention(first_add_norm, encoder_output, encoder_output, src_mask)
         second_add_norm = self.layerNorm_2(first_add_norm + self_attention)
         feed_forward = self.feedForward(second_add_norm)
-        third_add_norm = self.layerNorm_3(second_add_norm + feed_forward)
+        third_add_norm = self.layerNorm_3(second_add_norm + self.dropout(feed_forward))
         return third_add_norm

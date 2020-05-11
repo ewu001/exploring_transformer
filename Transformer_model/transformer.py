@@ -6,6 +6,7 @@ import sys
 from Transformer_model.encoder import Encoder
 from Transformer_model.decoder import Decoder
 from Transformer_model.generator import Generator
+from Transformer_model.model_embedding import ModelEmbedding
 
 from utility import generate_src_masks, generate_tgt_masks
 from collections import namedtuple
@@ -20,21 +21,21 @@ class Transformer(nn.Module):
     Decoder takes encoder input, generates output at each step via auto-regressive pattern
     Generator includes a linear projection of decoder output and map to softmax regression for output probability distribution
     '''
-    def __init__(self, vocab, dim_model, n_heads, device, N=6):
+    def __init__(self, vocab, dim_model, n_heads, N=1):
         super(Transformer, self).__init__()
         self.vocab = vocab
         self.dim_model = dim_model
         self.n_heads = n_heads
         self.number_layer = N
-        # Hardcode device to CPU for now
-        self.device = device
+        self.model_embedding = ModelEmbedding(self.dim_model, len(self.vocab.src))
+
+        self.device = self.get_device
 
         self.encoder = Encoder(self.dim_model, len(self.vocab.src), self.number_layer)
         self.decoder = Decoder(self.dim_model, len(self.vocab.tgt), self.number_layer)
         self.generator = Generator(self.dim_model, len(self.vocab.tgt))
 
     def forward(self, src, tgt):
-
         # Convert list of lists into tensors
         source_padded = self.vocab.src.to_input_tensor(src, device=self.device)   # Tensor: (sen_len, batch_size )
         source_padded = source_padded.permute(1, 0)
@@ -62,7 +63,7 @@ class Transformer(nn.Module):
         print('save model parameters to [%s]' % path, file=sys.stderr)
 
         params = {
-            'args': dict(dim_model=self.dim_model, n_heads=self.n_heads, device=self.device, N=self.number_layer),
+            'args': dict(dim_model=self.dim_model, n_heads=self.n_heads,  N=self.number_layer),
             'vocab': self.vocab,
             'state_dict': self.state_dict()
         }
@@ -82,6 +83,21 @@ class Transformer(nn.Module):
 
         return model
 
+    @property
+    def get_device(self):
+        """ Determine which device to place the Tensors upon, CPU or GPU.
+        """
+        # setting device on GPU if available, else CPU
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        # Additional Info when using cuda
+        if device.type == 'cuda':
+            print(torch.cuda.get_device_name(0))
+            print('Memory Usage:')
+            print('Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+            print('Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
+        return device
+
 
     def greedy_decoding(self, src_sent, max_decoding_time_step):
         '''
@@ -89,37 +105,49 @@ class Transformer(nn.Module):
         @param src_sent: lis[str], one sentence to decide
         '''
         #src_mask = (src_sent != input_pad).unsqueeze(-2)
-        word_ids = self.vocab.src.words2indices(src_sent)   
-        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(0) # Tensor: (batch_size, sent_length )
+        word_ids = self.vocab.src.words2indices(src_sent)
 
-        #print(source_tensor.shape)
+        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(0)  # Tensor: (batch_size, sent_length )
+
         enc_outputs = self.encoder(source_tensor, None)
-    
+        print("encoder output: ", enc_outputs.shape)
+
         #outputs = torch.zeros(max_decoding_time_step)
-        target_output = [0 for i in range(max_decoding_time_step)]
-        target_output[0] = self.vocab.tgt.word2id['<s>']
+        target_output = []
+        target_output.append('<s>')
         for i in range(1, max_decoding_time_step):    
             
-            tgt_mask = np.triu(np.ones((1, i, i)),k=1).astype('uint8')
-            #trg_mask= torch.autograd.Variable(torch.from_numpy(trg_mask) == 0).cuda()  # For GPU
-            tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0)  # For CPU
-            current_output = target_output[:i]
-            tgt_word_ids = self.vocab.src.words2indices(current_output)   
-            target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device).unsqueeze(0) 
+            #tgt_mask = np.triu(np.ones((1, i, i)),k=1).astype('uint8')
+            #if torch.cuda.is_available():
+            #    tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0).cuda()  # For GPU
+            #else:
+            #    tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0)  # For CPU
+
+            current_output = target_output
+
+            tgt_word_ids = self.vocab.tgt.words2indices(current_output)
+            target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device).unsqueeze(0)
             
             #print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
-            decoder_output = self.decoder(target_tensor, enc_outputs, None, tgt_mask)
-            output = self.generator(decoder_output)
-            out = torch.nn.functional.softmax(output, dim=-1)
-            _, ix = out[:, -1].data.topk(1)
+            decoder_output = self.decoder(target_tensor, enc_outputs, None, None)
+            output_dist = self.generator(decoder_output)
+            #output_dist = torch.nn.functional.log_softmax(output, dim=-1)
+            #print("decoder out: ", output_dist.shape)
 
-            target_output[i] = ix[0][0].item()
-            if ix[0][0] == self.vocab.tgt.word2id['</s>']:
-                break
-        target_output_extraction = [self.vocab.tgt.id2word[ix] for ix in target_output if target_output[ix] not in [1, 0]]
+            _, next_word = torch.max(output_dist, dim=-1)
+            next_word_id = next_word.data[0][0].item()
+            target_output.append(self.vocab.tgt.id2word[next_word_id])
+            #top_cand_hyp_scores, top_cand_hyp_pos = torch.topk(output_dist, k=1)
+            #print(top_cand_hyp_scores)
+            #print(top_cand_hyp_pos)
+            #target_output.append(top_cand_hyp_pos[0][0].item())
+            #if top_cand_hyp_pos[0][0] == self.vocab.tgt.word2id['</s>']:
+            #    break
+        print(target_output)
+        #target_output_extraction = [self.vocab.tgt.id2word[ix] for ix in target_output]
         # Due to greedy decoding, only 1 hypothesis will be generated thus the score is equal to 1
         # Score value will vary in the case of beam search decoding
-        hypothesis = Hypothesis(value=target_output_extraction, score=1)
+        hypothesis = Hypothesis(value=target_output, score=1)
         
         return [hypothesis]
 
@@ -133,15 +161,13 @@ class Transformer(nn.Module):
                 value: List[str]: the decoded target sentence, represented as a list of words
                 score: float: the log-likelihood of the target sentence
         """
-        src_sents_var = self.vocab.src.to_input_tensor([src_sent], self.device)
+        word_ids = self.vocab.src.words2indices(src_sent)
+        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(0)  # Tensor: (batch_size, sent_length )
 
-        src_encodings, dec_init_vec = self.encode(src_sents_var, [len(src_sent)])
-        src_encodings_att_linear = self.att_projection(src_encodings)
+        enc_outputs = self.encoder(source_tensor, None)
 
-        h_tm1 = dec_init_vec
-        att_tm1 = torch.zeros(1, self.hidden_size, device=self.device)
-
-        eos_id = self.vocab.tgt['</s>']
+        target_output = [0 for i in range(max_decoding_time_step)]
+        target_output[0] = self.vocab.tgt.word2id['<s>']
 
         hypotheses = [['<s>']]
         hyp_scores = torch.zeros(len(hypotheses), dtype=torch.float, device=self.device)
@@ -152,24 +178,28 @@ class Transformer(nn.Module):
             t += 1
             hyp_num = len(hypotheses)
 
-            exp_src_encodings = src_encodings.expand(hyp_num,
-                                                     src_encodings.size(1),
-                                                     src_encodings.size(2))
+            exp_enc_outputs = enc_outputs.expand(hyp_num,
+                                                     enc_outputs.size(1),
+                                                     enc_outputs.size(2))
 
-            exp_src_encodings_att_linear = src_encodings_att_linear.expand(hyp_num,
-                                                                           src_encodings_att_linear.size(1),
-                                                                           src_encodings_att_linear.size(2))
+            tgt_mask = np.triu(np.ones((1, t, t)), k=1).astype('uint8')
+            if torch.cuda.is_available():
+                tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0).cuda()  # For GPU
+            else:
+                tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0)  # For CPU
 
-            y_tm1 = torch.tensor([self.vocab.tgt[hyp[-1]] for hyp in hypotheses], dtype=torch.long, device=self.device)
-            y_t_embed = self.model_embeddings.target(y_tm1)
+            #current_output = target_output[:t]
+            tgt_word_ids = self.vocab.src.words2indices(hypotheses)
+            target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device).unsqueeze(0)
 
-            x = torch.cat([y_t_embed, att_tm1], dim=-1)
+            # print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
+            decoder_output = self.decoder(target_tensor, exp_enc_outputs, None, tgt_mask)
+            output = self.generator(decoder_output)
 
-            (h_t, cell_t), att_t, _  = self.step(x, h_tm1,
-                                                      exp_src_encodings, exp_src_encodings_att_linear, enc_masks=None)
+
 
             # log probabilities over target words
-            log_p_t = F.log_softmax(self.target_vocab_projection(att_t), dim=-1)
+            log_p_t = torch.nn.functional.log_softmax(output, dim=-1)
 
             live_hyp_num = beam_size - len(completed_hypotheses)
             contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(log_p_t) + log_p_t).view(-1)
@@ -201,8 +231,6 @@ class Transformer(nn.Module):
                 break
 
             live_hyp_ids = torch.tensor(live_hyp_ids, dtype=torch.long, device=self.device)
-            h_tm1 = (h_t[live_hyp_ids], cell_t[live_hyp_ids])
-            att_tm1 = att_t[live_hyp_ids]
 
             hypotheses = new_hypotheses
             hyp_scores = torch.tensor(new_hyp_scores, dtype=torch.float, device=self.device)

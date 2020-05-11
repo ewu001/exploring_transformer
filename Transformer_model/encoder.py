@@ -62,7 +62,9 @@ class EncoderLayer(nn.Module):
         self.feedForward = PositionWiseFeedForward(self.dim_model)
 
         self.layerNorm_1 = LayerNormalization(self.dim_model)
-        self.layerNorm_2 = LayerNormalization(self.dim_model)  
+        self.layerNorm_2 = LayerNormalization(self.dim_model)
+        self.dropout = nn.Dropout(0.1)
+
 
     def forward(self, x, mask):
         '''
@@ -73,5 +75,5 @@ class EncoderLayer(nn.Module):
         '''
         self_attention = self.multiheadAttention(x, x, x, mask)
         first_add_norm = self.layerNorm_1(self_attention + x)
-        second_add_norm = self.layerNorm_2(first_add_norm + self.feedForward(first_add_norm))
+        second_add_norm = self.layerNorm_2(first_add_norm + self.dropout(self.feedForward(first_add_norm)))
         return second_add_norm

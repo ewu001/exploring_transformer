@@ -117,8 +117,8 @@ def train(args: Dict):
 
     #train_batch_size = int(args['--batch-size'])
     #valid_niter = int(args['--valid-niter'])
-    train_batch_size = 1
-    valid_niter = 200
+    train_batch_size = 2
+    valid_niter = 2000
     clip_grad = float(args['--clip-grad'])
     log_every = int(args['--log-every'])
     model_save_path = args['--save-to']
@@ -129,7 +129,7 @@ def train(args: Dict):
     device = torch.device("cuda:0" if args['--cuda'] else "cpu")
     print('use device: %s' % device, file=sys.stderr)
 
-    model = Transformer(vocab=vocab, dim_model=512, device=device, n_heads=8)
+    model = Transformer(vocab=vocab, dim_model=256, n_heads=8)
 
     model.train()
 

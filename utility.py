@@ -86,11 +86,12 @@ def generate_tgt_masks(target_padded, pad):
     size = target_padded.size(1) # get seq_len for matrix
 
     nopeak_mask = np.triu(np.ones((1, size, size)), k=1).astype('uint8')
-    # Uncomment this if training in GPU is available
-    #nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0).cuda()
-
-    # Uncomment this if training is in CPU only
-    nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0)
+    if torch.cuda.is_available():
+        # Uncomment this if training in GPU is available
+        nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0).cuda()
+    else:
+        # Uncomment this if training is in CPU only
+        nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0)
 
     target_mask = target_msk & nopeak_mask
     return target_mask
