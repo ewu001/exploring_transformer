@@ -1,13 +1,13 @@
 #!/bin/bash
 
 if [ "$1" = "train-pre" ]; then
-	CUDA_VISIBLE_DEVICES=0 python run.py train --train-src=./en_es_data/train.en --train-tgt=./en_es_data/train.es --dev-src=./en_es_data/dev.en --dev-tgt=./en_es_data/dev.es --vocab=vocab.json --pretrain-model=./model_output/model.bin --batch-size=4 --cuda
+	CUDA_VISIBLE_DEVICES=0 python run.py train --train-src=./en_es_data/train.en --train-tgt=./en_es_data/train.es --dev-src=./en_es_data/dev.en --dev-tgt=./en_es_data/dev.es --vocab=vocab.json --pretrain-model=model.bin --cuda
 elif [ "$1" = "train" ]; then
 	CUDA_VISIBLE_DEVICES=0 python run.py train --train-src=./en_es_data/train.en --train-tgt=./en_es_data/train.es --dev-src=./en_es_data/dev.en --dev-tgt=./en_es_data/dev.es --vocab=vocab.json --cuda
 elif [ "$1" = "traincpu" ]; then
 	python run.py train --train-src=./en_es_data/train.en --train-tgt=./en_es_data/train.es --dev-src=./en_es_data/dev.en --dev-tgt=./en_es_data/dev.es --vocab=vocab.json
 elif [ "$1" = "test" ]; then
-  CUDA_VISIBLE_DEVICES=0 python run.py decode model.bin ./en_es_data/dev.en ./en_es_data/dev.es outputs/test_outputs.txt --cuda
+  CUDA_VISIBLE_DEVICES=0 python run.py decode model.bin ./en_es_data/test.en ./en_es_data/test.es outputs/test_outputs.txt --cuda
 elif [ "$1" = "test_light" ]; then
   CUDA_VISIBLE_DEVICES=0 python run.py decode model.bin ./en_es_data/dev_light.en ./en_es_data/dev_light.es outputs/test_outputs.txt --cuda
 elif [ "$1" = "train_local" ]; then

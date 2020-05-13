@@ -74,6 +74,7 @@ def batch_iter(data, batch_size, shuffle=False):
 
 def generate_src_masks(source_padded, pad):
     """ Generate sentence masks for encoder
+    This is the padding mask
     @param source_padded (Tensor): encodings of shape (b, src_len, 2*h), where b = batch size,
                                     src_len = max source length, h = hidden size. 
     """
@@ -81,7 +82,12 @@ def generate_src_masks(source_padded, pad):
     return source_msk
 
 def generate_tgt_masks(target_padded, pad):
-    "Create a mask to hide padding and future words."
+    '''
+    Create a mask to hide padding and future words.
+    This utility function adds padding mask and attention mask together
+    @param target_padded (Tensor): (batch_size, sentence_length)
+    '''
+
     target_msk = (target_padded != pad).unsqueeze(1)
     size = target_padded.size(1) # get seq_len for matrix
 

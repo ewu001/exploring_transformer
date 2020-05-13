@@ -117,8 +117,8 @@ def train(args: Dict):
 
     #train_batch_size = int(args['--batch-size'])
     #valid_niter = int(args['--valid-niter'])
-    train_batch_size = 2
-    valid_niter = 2000
+    train_batch_size = 1
+    valid_niter = 500
     clip_grad = float(args['--clip-grad'])
     log_every = int(args['--log-every'])
     model_save_path = args['--save-to']
