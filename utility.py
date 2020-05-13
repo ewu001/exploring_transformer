@@ -88,7 +88,7 @@ def generate_tgt_masks(target_padded, pad):
     @param target_padded (Tensor): (batch_size, sentence_length)
     '''
 
-    target_msk = (target_padded != pad).unsqueeze(1)
+    target_msk = (target_padded != pad).unsqueeze(-2)
     size = target_padded.size(1) # get seq_len for matrix
 
     nopeak_mask = np.triu(np.ones((1, size, size)), k=1).astype('uint8')

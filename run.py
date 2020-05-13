@@ -184,10 +184,21 @@ def train(args: Dict):
 
             batch_size = len(src_sents)
 
-            example_losses = -model(src_sents, tgt_sents) # (batch_size,)
-            batch_loss = example_losses.sum()
-            loss = batch_loss / batch_size
+            tgt_input = [ i[:-1] for i in tgt_sents]
+            tgt_real = [ i[1:] for i in tgt_sents ]
 
+
+            tgt_real_value = vocab.tgt.to_input_tensor(tgt_real, device=device)
+            tgt_real_value = tgt_real_value.permute(1, 0) # (batch_size, tgt_sentence )
+
+            prediction = model(src_sents, tgt_input) # (batch_size,, tgt_sentence, tgt_vocab_size)
+
+            #batch_loss = example_losses.sum()
+            #loss = batch_loss / batch_size
+            print("tgt real value shape: ", tgt_real_value.shape)
+            print("prediction shape: ", prediction.shape)
+
+            loss = torch.nn.functional.cross_entropy(prediction.permute(0, 2, 1), tgt_real_value, ignore_index=0)
             loss.backward()
 
             # clip gradient
@@ -195,7 +206,7 @@ def train(args: Dict):
 
             optimizer.step()
 
-            batch_losses_val = batch_loss.item()
+            batch_losses_val = loss
             report_loss += batch_losses_val
             cum_loss += batch_losses_val
 

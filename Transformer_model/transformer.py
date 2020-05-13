@@ -62,6 +62,7 @@ class Transformer(nn.Module):
         # compute log probability of generating true target words
         target_seq_length = target_padded.size(1)
         #print("target_seq_length: ", target_seq_length)
+        '''
         combined_outputs = []
         for i in range(target_seq_length):
             current_decoder_input = target_padded[:, :i+1]
@@ -69,7 +70,7 @@ class Transformer(nn.Module):
             current_target_mask = generate_tgt_masks(current_decoder_input, self.vocab.tgt['<pad>'])
             current_decoder_output = self.decoder(current_decoder_input, encoder_output, src_mask, current_target_mask)
             #print("current decoder output shape: ", current_decoder_output.shape)
-            current_output = current_decoder_output[:, i, :]
+            current_output = current_decoder_output[:, -1, :]
             #print("insert decoder output shape: ", current_output.shape)
 
             combined_outputs.append(current_output)
@@ -79,15 +80,20 @@ class Transformer(nn.Module):
         #print("combined outputs shape: ", combined_outputs.shape)
         prob_dist = self.generator(combined_outputs)  # Tensor (batch_size, tgt_length, tgt_vocab_size)
         #print("prob dist shape: ", prob_dist.shape)
-
+'''
+        target_mask = generate_tgt_masks(target_padded, self.vocab.tgt['<pad>'])
+        print("target_mask in training: ", target_mask.shape)
+        decoder_output = self.decoder(target_padded, encoder_output, src_mask, target_mask)
+        # print("decoder_output shape: ", decoder_output.shape)  # (batch_size, tgt_length, d_model)
+        final_output = self.generator(decoder_output)  # (batch_size, tgt_length, tgt_vocab_size)
         # Zero out, probabilities for which we have nothing in the target text
-        target_padded = target_padded.permute(1, 0)  # Tensor: (sen_len, batch_size )
-        target_pad_masks = (target_padded != self.vocab.tgt['<pad>']).float()
+        #target_padded = target_padded.permute(1, 0)  # Tensor: (sen_len, batch_size )
+        #target_pad_masks = (target_padded != self.vocab.tgt['<pad>']).float()
         # Compute log probability of generating true target words
-        target_gold_words_log_prob = torch.gather(prob_dist[1:], index=target_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_pad_masks[1:]
+        #target_gold_words_log_prob = torch.gather(prob_dist[1:], index=target_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_pad_masks[1:]
         #print(target_gold_words_log_prob.shape)
-        scores = target_gold_words_log_prob.sum(dim=0)
-        return scores
+        #scores = target_gold_words_log_prob.sum(dim=0)
+        return final_output
 
 
     def save(self, path: str):
