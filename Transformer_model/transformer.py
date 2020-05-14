@@ -7,6 +7,7 @@ from Transformer_model.encoder import Encoder
 from Transformer_model.decoder import Decoder
 from Transformer_model.generator import Generator
 from Transformer_model.model_embedding import ModelEmbedding
+from Transformer_model.positional_Embedding import PositionalEmbedding
 
 from utility import generate_src_masks, generate_tgt_masks
 from collections import namedtuple
@@ -27,7 +28,6 @@ class Transformer(nn.Module):
         self.dim_model = dim_model
         self.n_heads = n_heads
         self.number_layer = N
-        self.model_embedding = ModelEmbedding(self.dim_model, len(self.vocab.src))
 
         self.device = self.get_device
 
@@ -35,6 +35,44 @@ class Transformer(nn.Module):
         self.decoder = Decoder(self.dim_model, len(self.vocab.tgt), self.number_layer)
         self.generator = Generator(self.dim_model, len(self.vocab.tgt))
 
+        # For testing purpose
+        self.enc_embed = nn.Embedding(len(self.vocab.src), self.dim_model)
+        self.pos_encoder = PositionalEmbedding(self.dim_model, 10000)
+
+        self.dec_embed = nn.Embedding(len(self.vocab.tgt), self.dim_model)
+        self.pos_decoder = PositionalEmbedding(self.dim_model, 10000)
+        self.torchTransformer = nn.Transformer(d_model=self.dim_model, nhead=self.n_heads, num_encoder_layers=N, num_decoder_layers=N, dim_feedforward=self.dim_model, dropout=0.1, activation='relu')
+
+    def forward(self, src, tgt):
+        source_padded = self.vocab.src.to_input_tensor(src, device=self.device)   # Tensor: (sen_len, batch_size )
+        #source_padded = source_padded.permute(1, 0)
+        src_mask = self.generate_pad_mask(source_padded)
+
+        target_train_padded = self.vocab.tgt.to_input_tensor(tgt, device=self.device)
+        #target_padded = target_train_padded.permute(1, 0)  # Tensor: (batch_size, sen_len)
+        tgt_pad_mask = self.generate_pad_mask(target_train_padded)
+        tgt_square_mask = self.generate_square_subsequent_mask(target_train_padded.size(0))
+
+        src_input = self.enc_embed(source_padded.permute(1, 0))
+        src_input = self.pos_encoder(src_input)
+
+        tgt_input = self.dec_embed(target_train_padded.permute(1, 0))
+        tgt_input = self.pos_decoder(tgt_input)
+
+        output = self.torchTransformer(src_input.permute(1, 0, 2), tgt_input.permute(1, 0, 2), src_mask=None, tgt_mask=tgt_square_mask,
+                                    memory_mask=None, src_key_padding_mask=src_mask, tgt_key_padding_mask=tgt_pad_mask,
+                                    memory_key_padding_mask=src_mask)
+        output = self.generator(output)
+
+        # Test print
+        _, words = torch.max(output.permute(1, 0, 2)[-1], dim=-1)
+        print(words.shape)
+        words_to_print = [self.vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
+        print("Sample predicted sentence: ", words_to_print)
+
+        return output
+
+    """
     def forward(self, src, tgt):
         '''
         Take a mini-batch of source and target sentences, compute the log-likelihood of target sentences under the
@@ -44,15 +82,16 @@ class Transformer(nn.Module):
 
         '''
         # Convert list of lists into tensors
-        tgt_to_train = [sent[:-1] for sent in tgt]
-        tgt_to_validate = [sent[1:] for sent in tgt]
+        #tgt_to_train = [sent[:-1] for sent in tgt]
+        #tgt_to_validate = [sent[1:] for sent in tgt]
 
         source_padded = self.vocab.src.to_input_tensor(src, device=self.device)   # Tensor: (sen_len, batch_size )
         source_padded = source_padded.permute(1, 0)
         src_mask = generate_src_masks(source_padded, self.vocab.src['<pad>'])
+        #print(src_mask)
         encoder_output = self.encoder(source_padded, src_mask) # Tensor: (batch_size, src_len, dim_model)
         #print("encoder output shape: ", encoder_output.shape)
-        target_train_padded = self.vocab.tgt.to_input_tensor(tgt_to_train, device=self.device)
+        target_train_padded = self.vocab.tgt.to_input_tensor(tgt, device=self.device)
         target_padded = target_train_padded.permute(1, 0)  # Tensor: (batch_size, sen_len)
         #print("target_padded shape: ", target_padded.shape)
 
@@ -97,28 +136,38 @@ class Transformer(nn.Module):
         print(" Current predicted target is: ", print_output)
         '''
         target_mask = generate_tgt_masks(target_padded, self.vocab.tgt['<pad>'])
+        #print(target_mask)
         #print("target_mask in training: ", target_mask.shape)
         decoder_output = self.decoder(target_padded, encoder_output, src_mask, target_mask)
         # print("decoder_output shape: ", decoder_output.shape)  # (batch_size, tgt_length, d_model)
         final_output = self.generator(decoder_output)  # (batch_size, tgt_length, tgt_vocab_size)
 
         # Test print
-        #_, words = torch.max(final_output[:, :-1, :].squeeze(0), dim=-1)
-        #words_to_print = [self.vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
-        #print("Predicted sentence: ", words_to_print)
+        _, words = torch.max(final_output[-1], dim=-1)
+        print(words.shape)
+        words_to_print = [self.vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
+        print("Sample predicted sentence: ", words_to_print)
 
         # Zero out, probabilities for which we have nothing in the target text
         final_output = final_output.permute(1, 0, 2) # (sentence_len, batch_size, vocab_size)
 
-        target_to_val_padded = self.vocab.tgt.to_input_tensor(tgt_to_validate, device=self.device) # (sen_len, batch_size )
+        #target_to_val_padded = self.vocab.tgt.to_input_tensor(tgt_to_validate, device=self.device) # (sen_len, batch_size )
 
-        target_to_val_pad_masks = (target_to_val_padded != self.vocab.tgt['<pad>']).float()
+        #target_to_val_pad_masks = (target_to_val_padded != self.vocab.tgt['<pad>']).float()
         # Compute log probability of generating true target words
-        target_gold_words_log_prob = torch.gather(final_output, index=target_to_val_padded.unsqueeze(-1), dim=-1).squeeze(-1) * target_to_val_pad_masks
-        scores = target_gold_words_log_prob.sum(dim=0)
+        #target_gold_words_log_prob = torch.gather(final_output, index=target_to_val_padded.unsqueeze(-1), dim=-1).squeeze(-1) * target_to_val_pad_masks
+        #scores = target_gold_words_log_prob.sum(dim=0)
 
-        return scores
+        return final_output
+    """
 
+    def generate_pad_mask(self, inp):
+        return (inp == 0).transpose(0, 1)
+
+    def generate_square_subsequent_mask(self, size):
+        mask = torch.triu(torch.ones(size, size), 1)
+        mask = mask.masked_fill(mask==1, float('-inf'))
+        return mask
 
     def save(self, path: str):
         """ Save the trained model to a file at specified path location.

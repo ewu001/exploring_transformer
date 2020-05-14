@@ -75,11 +75,11 @@ def batch_iter(data, batch_size, shuffle=False):
 def generate_src_masks(source_padded, pad):
     """ Generate sentence masks for encoder
     This is the padding mask
-    @param source_padded (Tensor): encodings of shape (b, src_len, 2*h), where b = batch size,
-                                    src_len = max source length, h = hidden size. 
+    @param source_padded (Tensor): encodings of shape (b, src_len), where b = batch size,
+                                    src_len = max source length
     """
-    source_msk = (source_padded != pad).unsqueeze(-2)
-    return source_msk
+    source_mask = (source_padded != pad).unsqueeze(-2)
+    return source_mask
 
 def generate_tgt_masks(target_padded, pad):
     '''
@@ -91,13 +91,14 @@ def generate_tgt_masks(target_padded, pad):
     target_msk = (target_padded != pad).unsqueeze(-2)
     size = target_padded.size(1) # get seq_len for matrix
 
-    nopeak_mask = np.triu(np.ones((1, size, size)), k=1).astype('uint8')
+    #nopeak_mask = np.triu(np.ones((1, size, size)), k=1).astype('uint8')
+    nopeak_mask = torch.triu(torch.ones(size, size), 1)
     if torch.cuda.is_available():
         # Uncomment this if training in GPU is available
-        nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0).cuda()
+        nopeak_mask = torch.autograd.Variable(nopeak_mask == 0).cuda()
     else:
         # Uncomment this if training is in CPU only
-        nopeak_mask = torch.autograd.Variable(torch.from_numpy(nopeak_mask) == 0)
+        nopeak_mask = torch.autograd.Variable(nopeak_mask == 0)
 
     target_mask = target_msk & nopeak_mask
     return target_mask

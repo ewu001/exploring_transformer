@@ -64,8 +64,10 @@ class MultiheadAttention(nn.Module):
         scores = torch.matmul(query, key.permute(0, 1, 3, 2)) / math.sqrt(dim_k)
 
         if mask is not None:
+            # Same mask applied to all h heads.
             mask = mask.unsqueeze(1)
-            scores = scores.masked_fill(mask==0, -1e9)
+            scores = scores.masked_fill( mask==False, -1e9)
+
         # softmax at the sentence_length level
         scores_distribution = torch.nn.functional.softmax(scores, dim=-1)
         attention_head = torch.matmul(scores_distribution, value)

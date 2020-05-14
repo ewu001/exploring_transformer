@@ -23,7 +23,7 @@ class Decoder(nn.Module):
         self.tgt_vocab_size = tgt_vocab_size
         self.num_decoder = num_decoder
         self.input_embedding = ModelEmbedding(self.dim_model, self.tgt_vocab_size)
-        self.position_embedding = PositionWiseFeedForward(self.dim_model)
+        self.position_embedding = PositionalEmbedding(self.dim_model, max_length=10000)
 
         self.decoder_layer = DecoderLayer(self.dim_model, num_head=8)
         self.layerNorm = LayerNormalization(self.dim_model)

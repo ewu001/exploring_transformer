@@ -43,6 +43,7 @@ import pickle
 import time
 import argparse
 
+
 from docopt import docopt
 from nltk.translate.bleu_score import corpus_bleu, sentence_bleu, SmoothingFunction
 from collections import namedtuple
@@ -54,11 +55,12 @@ from vocab import Vocab, VocabEntry
 from Transformer_model.transformer import Transformer
 
 import torch
+import torch.nn as nn
 import torch.nn.utils
 
 Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
-def evaluate_ppl(model, dev_data, batch_size=32):
+def evaluate_ppl(model, dev_data, vocab, device, batch_size=32):
     """ Evaluate perplexity on dev sentences
     @param model (Transformer): Transformer Model
     @param dev_data (list of (src_sent, tgt_sent)): list of tuples containing source and target sentence
@@ -74,7 +76,20 @@ def evaluate_ppl(model, dev_data, batch_size=32):
     # no_grad() signals backend to throw away all gradients
     with torch.no_grad():
         for src_sents, tgt_sents in batch_iter(dev_data, batch_size):
-            loss = -model(src_sents, tgt_sents).sum()
+            
+            tgt_input = [ i[:-1] for i in tgt_sents]
+            tgt_real = [ i[1:] for i in tgt_sents ]
+
+
+            tgt_real_value = vocab.tgt.to_input_tensor(tgt_real, device=device)
+
+            #loss = -model(src_sents, tgt_sents).sum()
+            prediction = model(src_sents, tgt_input) # (tgt_sentence, batch_size, tgt_vocab_size)
+
+            vocab_size = prediction.shape[-1]
+            # Compare Tensor (sen_len * batch_size, vocab_size) with (sen_len*batch_size)
+            loss = torch.nn.functional.cross_entropy(prediction.view(-1, vocab_size), tgt_real_value.view(-1), ignore_index=vocab.tgt.word2id['<pad>'])
+
 
             cum_loss += loss.item()
             tgt_word_num_to_predict = sum(len(s[1:]) for s in tgt_sents)  # omitting leading `<s>`
@@ -117,7 +132,7 @@ def train(args: Dict):
 
     #train_batch_size = int(args['--batch-size'])
     #valid_niter = int(args['--valid-niter'])
-    train_batch_size = 1
+    train_batch_size = 2
     valid_niter = 500
     clip_grad = float(args['--clip-grad'])
     log_every = int(args['--log-every'])
@@ -145,6 +160,8 @@ def train(args: Dict):
     model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=float(args['--lr']))
+
+    criterion = nn.CrossEntropyLoss(ignore_index=vocab.tgt.word2id['<pad>'])
 
     num_trial = 0
     train_iter = patience = cum_loss = report_loss = cum_tgt_words = report_tgt_words = 0
@@ -186,19 +203,35 @@ def train(args: Dict):
 
             tgt_input = [ i[:-1] for i in tgt_sents]
             tgt_real = [ i[1:] for i in tgt_sents ]
+            #print(tgt_input)
+            print(tgt_real)
 
 
+            #tgt_real_value = tgt_real_value.permute(1, 0) # (batch_size, tgt_sentence )
+
+            prediction = model(src_sents, tgt_input) # (tgt_sentence, batch_size, tgt_vocab_size)
+
+            # Generate LOSS
+            log_pred = torch.nn.functional.log_softmax(prediction, dim=-1)
             tgt_real_value = vocab.tgt.to_input_tensor(tgt_real, device=device)
-            tgt_real_value = tgt_real_value.permute(1, 0) # (batch_size, tgt_sentence )
+            target_to_val_pad_masks = (tgt_real_value != vocab.tgt.word2id['<pad>']).float()
+            # Compute log probability of generating true target words
+            target_gold_words_log_prob = torch.gather(log_pred, index=tgt_real_value.unsqueeze(-1), dim=-1).squeeze(-1) * target_to_val_pad_masks
+            batch_loss_scores = target_gold_words_log_prob.sum(dim=0)
+            
+            #output_dim = prediction.shape[-1]
+            #print("prediction shape: ", prediction.view(-1, output_dim).shape)
+            #print(tgt_real_value.view(-1, 1).shape)
 
-            prediction = model(src_sents, tgt_input) # (batch_size,, tgt_sentence, tgt_vocab_size)
+            #loss = torch.nn.functional.cross_entropy(prediction.permute(0, 2, 1), tgt_real_value, ignore_index=vocab.tgt.word2id['<pad>'])
+            #loss = criterion(prediction.view(-1, output_dim), tgt_real_value.view(-1, 1).squeeze(1))
+            #print(loss)
+            batch_loss = (-batch_loss_scores).sum()
+            loss = batch_loss / batch_size
+            #print("tgt real value shape: ", tgt_real_value.shape)
 
-            #batch_loss = example_losses.sum()
-            #loss = batch_loss / batch_size
-            print("tgt real value shape: ", tgt_real_value.shape)
-            print("prediction shape: ", prediction.shape)
 
-            loss = torch.nn.functional.cross_entropy(prediction.permute(0, 2, 1), tgt_real_value, ignore_index=0)
+            #loss = torch.nn.functional.cross_entropy(prediction.permute(0, 2, 1), tgt_real_value, ignore_index=0)
             loss.backward()
 
             # clip gradient
@@ -206,7 +239,7 @@ def train(args: Dict):
 
             optimizer.step()
 
-            batch_losses_val = loss
+            batch_losses_val = loss.item()
             report_loss += batch_losses_val
             cum_loss += batch_losses_val
 
@@ -241,7 +274,7 @@ def train(args: Dict):
                 print('begin validation ...', file=sys.stderr)
 
                 # compute dev. ppl and bleu
-                dev_ppl = evaluate_ppl(model, dev_data, batch_size=4)   # dev batch size can be a bit larger
+                dev_ppl = evaluate_ppl(model, dev_data, vocab, device, batch_size=4)   # dev batch size can be a bit larger
                 valid_metric = -dev_ppl
 
                 print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl), file=sys.stderr)
