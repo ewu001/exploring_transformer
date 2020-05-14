@@ -23,7 +23,7 @@ class Generator(nn.Module):
         
         '''
         linear_output = self.target_vocab_projection(inputs)
-        #softmax_output = torch.nn.functional.log_softmax(linear_output, dim=-1)
+        softmax_output = torch.nn.functional.log_softmax(linear_output, dim=-1)
 
 
-        return linear_output
+        return softmax_output

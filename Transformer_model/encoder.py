@@ -27,7 +27,7 @@ class Encoder(nn.Module):
         self.encoderLayer = EncoderLayer(self.dim_model, num_head=8)
         self.layerNorm = LayerNormalization(self.dim_model)
         self.layers = utility.get_clones(self.encoderLayer, self.num_encoder)
-
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, src, mask):
         '''
@@ -37,7 +37,9 @@ class Encoder(nn.Module):
         @param src (Tensor): (batch_size, sentence_length)
         '''
         embed_input = self.input_embedding(src)
-        x = self.position_embedding(embed_input)
+        pos = self.position_embedding(embed_input)
+        x = self.dropout(pos)
+        # can add a dropout here
         for enc_layer in self.layers:
             x = enc_layer(x, mask)
             x = self.layerNorm(x)
@@ -63,8 +65,8 @@ class EncoderLayer(nn.Module):
 
         self.layerNorm_1 = LayerNormalization(self.dim_model)
         self.layerNorm_2 = LayerNormalization(self.dim_model)
-        self.dropout = nn.Dropout(0.1)
-
+        self.dropout_1 = nn.Dropout(0.1)
+        self.dropout_2 = nn.Dropout(0.1)
 
     def forward(self, x, mask):
         '''
@@ -74,6 +76,6 @@ class EncoderLayer(nn.Module):
         Then concatenate with its input via a second residual network, before returning it as output
         '''
         self_attention = self.multiheadAttention(x, x, x, mask)
-        first_add_norm = self.layerNorm_1(self_attention + x)
-        second_add_norm = self.layerNorm_2(first_add_norm + self.dropout(self.feedForward(first_add_norm)))
+        first_add_norm = self.layerNorm_1(self.dropout_1(self_attention) + x)
+        second_add_norm = self.layerNorm_2(first_add_norm + self.dropout_2(self.feedForward(first_add_norm)))
         return second_add_norm

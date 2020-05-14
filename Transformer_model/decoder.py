@@ -29,6 +29,7 @@ class Decoder(nn.Module):
         self.layerNorm = LayerNormalization(self.dim_model)
 
         self.layers = utility.get_clones(self.decoder_layer, self.num_decoder)
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, tgt, enc_output, src_mask, tgt_mask):
         '''
@@ -37,7 +38,9 @@ class Decoder(nn.Module):
         Then go into each of the encoder layer based on number of encoder
         '''
         embed_input = self.input_embedding(tgt)
-        x = self.position_embedding(embed_input)
+        pos = self.position_embedding(embed_input)
+        # can add a dropout here
+        x = self.dropout(pos)
         for dec_layer in self.layers:
             x = dec_layer(x, enc_output, tgt_mask, src_mask)
             x = self.layerNorm(x)
@@ -69,7 +72,9 @@ class DecoderLayer(nn.Module):
         self.layerNorm_2 = LayerNormalization(self.dim_model)  
         self.layerNorm_3 = LayerNormalization(self.dim_model)
 
-        self.dropout = nn.Dropout(0.1)
+        self.dropout_1 = nn.Dropout(0.1)
+        self.dropout_2 = nn.Dropout(0.1)
+        self.dropout_3 = nn.Dropout(0.1)
 
     def forward(self, x, encoder_output, tgt_mask, src_mask):
         '''
@@ -80,12 +85,12 @@ class DecoderLayer(nn.Module):
         Then concatenate with its input via a second residual network, before returning it as output
         '''
         masked_attention = self.maskedMultiheadAttention(x, x, x, tgt_mask)
-        first_add_norm = self.layerNorm_1(masked_attention + x)
+        first_add_norm = self.layerNorm_1(self.dropout_1(masked_attention) + x)
         # Query comes from previous decoder layer while the key and value comes from encoder output
         # All position in decoder can attend over all position of input sequence
         # Here we use source mask to compute scaled dot product attention heads
         self_attention = self.multiheadAttention(first_add_norm, encoder_output, encoder_output, src_mask)
-        second_add_norm = self.layerNorm_2(first_add_norm + self_attention)
+        second_add_norm = self.layerNorm_2(first_add_norm + self.dropout_2(self_attention))
         feed_forward = self.feedForward(second_add_norm)
-        third_add_norm = self.layerNorm_3(second_add_norm + self.dropout(feed_forward))
+        third_add_norm = self.layerNorm_3(second_add_norm + self.dropout_3(feed_forward))
         return third_add_norm

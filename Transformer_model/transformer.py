@@ -44,14 +44,18 @@ class Transformer(nn.Module):
 
         '''
         # Convert list of lists into tensors
+        tgt_to_train = [sent[:-1] for sent in tgt]
+        tgt_to_validate = [sent[1:] for sent in tgt]
+
         source_padded = self.vocab.src.to_input_tensor(src, device=self.device)   # Tensor: (sen_len, batch_size )
         source_padded = source_padded.permute(1, 0)
         src_mask = generate_src_masks(source_padded, self.vocab.src['<pad>'])
         encoder_output = self.encoder(source_padded, src_mask) # Tensor: (batch_size, src_len, dim_model)
         #print("encoder output shape: ", encoder_output.shape)
-        target_padded = self.vocab.tgt.to_input_tensor(tgt, device=self.device)
-        target_padded = target_padded.permute(1, 0)  # Tensor: (batch_size, sen_len)
+        target_train_padded = self.vocab.tgt.to_input_tensor(tgt_to_train, device=self.device)
+        target_padded = target_train_padded.permute(1, 0)  # Tensor: (batch_size, sen_len)
         #print("target_padded shape: ", target_padded.shape)
+
         # From here:
         # Loop through based on sen_len, it should be the longest sentence in current batch, each iteration serves as one time step
         # Cut target_padded based on loop index so each time step the decoder sees one more target word
@@ -60,10 +64,13 @@ class Transformer(nn.Module):
         # add this current max output to a combined output list, note this list is apart from the ground truth target list
         # zero out, probabilities for which we have nothing in the target text, such as pad token
         # compute log probability of generating true target words
-        target_seq_length = target_padded.size(1)
+        #target_seq_length = target_padded.size(1)
         #print("target_seq_length: ", target_seq_length)
+        #print(" Current input target is: ", tgt)
         '''
         combined_outputs = []
+        print_output = []
+        print(" Current input target is: ", tgt)
         for i in range(target_seq_length):
             current_decoder_input = target_padded[:, :i+1]
             #print("current decoder_input shape: ", current_decoder_input.shape)
@@ -76,24 +83,41 @@ class Transformer(nn.Module):
             combined_outputs.append(current_output)
             #current_output = self.generator(current_decoder_output)  # Tensor (batch size, 1, tgt_vocab_size)
             #target_padded[:, i+1] = current_decoder_output
-        combined_outputs = torch.stack(combined_outputs)
+
+            output_dist = torch.nn.functional.log_softmax(current_output, dim=-1)
+            _, next_word = torch.max(output_dist, dim=-1)
+            # print(next_word)
+            next_word_id = next_word.data[0].item()
+            print_output.append(self.vocab.tgt.id2word[next_word_id])
+
+        combined_outputs = torch.stack(combined_outputs) # Tensor ( tgt_length, batch_size, d_model )
         #print("combined outputs shape: ", combined_outputs.shape)
-        prob_dist = self.generator(combined_outputs)  # Tensor (batch_size, tgt_length, tgt_vocab_size)
-        #print("prob dist shape: ", prob_dist.shape)
-'''
+        prob_dist = self.generator(combined_outputs)
+        #print("prob dist shape: ", prob_dist.shape) # Tensor ( tgt_length, batch_size, tgt_vocab_size)
+        print(" Current predicted target is: ", print_output)
+        '''
         target_mask = generate_tgt_masks(target_padded, self.vocab.tgt['<pad>'])
-        print("target_mask in training: ", target_mask.shape)
+        #print("target_mask in training: ", target_mask.shape)
         decoder_output = self.decoder(target_padded, encoder_output, src_mask, target_mask)
         # print("decoder_output shape: ", decoder_output.shape)  # (batch_size, tgt_length, d_model)
         final_output = self.generator(decoder_output)  # (batch_size, tgt_length, tgt_vocab_size)
+
+        # Test print
+        #_, words = torch.max(final_output[:, :-1, :].squeeze(0), dim=-1)
+        #words_to_print = [self.vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
+        #print("Predicted sentence: ", words_to_print)
+
         # Zero out, probabilities for which we have nothing in the target text
-        #target_padded = target_padded.permute(1, 0)  # Tensor: (sen_len, batch_size )
-        #target_pad_masks = (target_padded != self.vocab.tgt['<pad>']).float()
+        final_output = final_output.permute(1, 0, 2) # (sentence_len, batch_size, vocab_size)
+
+        target_to_val_padded = self.vocab.tgt.to_input_tensor(tgt_to_validate, device=self.device) # (sen_len, batch_size )
+
+        target_to_val_pad_masks = (target_to_val_padded != self.vocab.tgt['<pad>']).float()
         # Compute log probability of generating true target words
-        #target_gold_words_log_prob = torch.gather(prob_dist[1:], index=target_padded[1:].unsqueeze(-1), dim=-1).squeeze(-1) * target_pad_masks[1:]
-        #print(target_gold_words_log_prob.shape)
-        #scores = target_gold_words_log_prob.sum(dim=0)
-        return final_output
+        target_gold_words_log_prob = torch.gather(final_output, index=target_to_val_padded.unsqueeze(-1), dim=-1).squeeze(-1) * target_to_val_pad_masks
+        scores = target_gold_words_log_prob.sum(dim=0)
+
+        return scores
 
 
     def save(self, path: str):
@@ -152,7 +176,6 @@ class Transformer(nn.Module):
         enc_outputs = self.encoder(source_tensor, None)
         #print("encoder output: ", enc_outputs.shape)
 
-        outputs = torch.zeros(max_decoding_time_step)
         target_output = []
         target_output.append('<s>')
         for i in range(1, max_decoding_time_step):
@@ -167,23 +190,21 @@ class Transformer(nn.Module):
 
             tgt_word_ids = self.vocab.tgt.words2indices(current_output)
             target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device).unsqueeze(0)
+            print("target tensor shape: ", target_tensor.shape)
             
             #print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
             decoder_output = self.decoder(target_tensor, enc_outputs, None, tgt_mask)
             output_dist = self.generator(decoder_output)
-            #output_dist = torch.nn.functional.log_softmax(output, dim=-1)
+            prediction = output_dist[:, -1, :]  # (batch_size, 1, vocab_size)
+            #output_dist = torch.nn.functional.log_softmax(prediction, dim=-1)
             #print("decoder out: ", output_dist.shape)
 
-            _, next_word = torch.max(output_dist, dim=-1)
-            #print(next_word)
-            next_word_id = next_word.data[0][0].item()
+            _, next_word = torch.max(prediction, dim=-1)
+            print("next word: ", next_word)
+            next_word_id = next_word.data[0].item()
             target_output.append(self.vocab.tgt.id2word[next_word_id])
-            #top_cand_hyp_scores, top_cand_hyp_pos = torch.topk(output_dist, k=1)
-            #print(top_cand_hyp_scores)
-            #print(top_cand_hyp_pos)
-            #target_output.append(top_cand_hyp_pos[0][0].item())
-            #if top_cand_hyp_pos[0][0] == self.vocab.tgt.word2id['</s>']:
-            #    break
+            if next_word_id == self.vocab.tgt.word2id['</s>']:
+                break
         print(target_output)
         #target_output_extraction = [self.vocab.tgt.id2word[ix] for ix in target_output]
         # Due to greedy decoding, only 1 hypothesis will be generated thus the score is equal to 1
@@ -218,7 +239,7 @@ class Transformer(nn.Module):
         while len(completed_hypotheses) < beam_size and t < max_decoding_time_step:
             t += 1
             hyp_num = len(hypotheses)
-
+            print(hypotheses)
             exp_enc_outputs = enc_outputs.expand(hyp_num,
                                                      enc_outputs.size(1),
                                                      enc_outputs.size(2))
@@ -230,20 +251,25 @@ class Transformer(nn.Module):
                 tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0)  # For CPU
 
             #current_output = target_output[:t]
-            tgt_word_ids = self.vocab.src.words2indices(hypotheses)
-            target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device).unsqueeze(0)
+            tgt_word_ids = [self.vocab.tgt.words2indices(hyp) for hyp in hypotheses]
+            target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device)
 
-            # print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
+
+
+            print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
+            print(exp_enc_outputs.shape)  # Tensor: (batch_size, sent_length )
             decoder_output = self.decoder(target_tensor, exp_enc_outputs, None, tgt_mask)
             output = self.generator(decoder_output)
-
-
+            prediction = output[:, -1, :]
+            print(prediction.shape)
 
             # log probabilities over target words
-            log_p_t = torch.nn.functional.log_softmax(output, dim=-1)
+            #log_p_t = torch.nn.functional.log_softmax(output, dim=-1)
+            #log_p_t = prediction.permute(1, 0, 2)
 
             live_hyp_num = beam_size - len(completed_hypotheses)
-            contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(log_p_t) + log_p_t).view(-1)
+            contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(prediction) + prediction).view(-1)
+            print(contiuating_hyp_scores.shape)
             top_cand_hyp_scores, top_cand_hyp_pos = torch.topk(contiuating_hyp_scores, k=live_hyp_num)
 
             prev_hyp_ids = top_cand_hyp_pos / len(self.vocab.tgt)
