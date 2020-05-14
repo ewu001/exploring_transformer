@@ -86,6 +86,11 @@ def evaluate_ppl(model, dev_data, vocab, device, batch_size=32):
             #loss = -model(src_sents, tgt_sents).sum()
             prediction = model(src_sents, tgt_input) # (tgt_sentence, batch_size, tgt_vocab_size)
 
+            # Test print
+            _, words = torch.max(prediction.permute(1, 0, 2)[-1], dim=-1)
+            words_to_print = [vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
+            print("Sample predicted sentence: ", words_to_print)
+
             vocab_size = prediction.shape[-1]
             # Compare Tensor (sen_len * batch_size, vocab_size) with (sen_len*batch_size)
             loss = torch.nn.functional.cross_entropy(prediction.view(-1, vocab_size), tgt_real_value.view(-1), ignore_index=vocab.tgt.word2id['<pad>'])

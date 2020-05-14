@@ -65,10 +65,10 @@ class Transformer(nn.Module):
         output = self.generator(output)
 
         # Test print
-        _, words = torch.max(output.permute(1, 0, 2)[-1], dim=-1)
-        print(words.shape)
-        words_to_print = [self.vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
-        print("Sample predicted sentence: ", words_to_print)
+        #_, words = torch.max(output.permute(1, 0, 2)[-1], dim=-1)
+        #print(words.shape)
+        #words_to_print = [self.vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
+        #print("Sample predicted sentence: ", words_to_print)
 
         return output
 
