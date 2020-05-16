@@ -102,3 +102,18 @@ def generate_tgt_masks(target_padded, pad):
 
     target_mask = target_msk & nopeak_mask
     return target_mask
+
+
+def generate_pad_mask(inp):
+        return (inp == 0).transpose(0, 1)
+
+
+def generate_square_subsequent_mask(size):
+    mask = torch.triu(torch.ones(size, size), 1)
+    if torch.cuda.is_available():
+        # Uncomment this if training in GPU is available
+        mask = mask.masked_fill(mask==1, float('-inf')).cuda()
+    else:
+        # Uncomment this if training is in CPU only
+        mask = mask.masked_fill(mask==1, float('-inf'))
+    return mask

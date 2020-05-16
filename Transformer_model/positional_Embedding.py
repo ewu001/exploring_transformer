@@ -55,7 +55,7 @@ class PositionalEmbedding(nn.Module):
         # To preserve valuable information from input embedding space while still concat positional embedding
         #inputs = inputs * math.sqrt(self.embed_size)
         if torch.cuda.is_available():
-            output = inputs + torch.Tensor(self.pe[:, :length, :]).cuda() # for GPU
+            output = inputs + torch.autograd.Variable(self.pe[:, :length, :], requires_grad=False).cuda()   # for GPU
         else:
-            output = inputs + torch.Tensor(self.pe[:, :length, :])  #for CPU
+            output = inputs + torch.Tensor(self.pe[:, :length, :] ) #for CPU
         return output

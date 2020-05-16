@@ -9,22 +9,20 @@ from Transformer_model.generator import Generator
 from Transformer_model.model_embedding import ModelEmbedding
 from Transformer_model.positional_Embedding import PositionalEmbedding
 
-from utility import generate_src_masks, generate_tgt_masks
+from utility import generate_pad_mask, generate_square_subsequent_mask
 from collections import namedtuple
 from typing import List, Tuple
+
 Hypothesis = namedtuple('Hypothesis', ['value', 'score'])
 
-class Transformer(nn.Module):
+
+class TorchTransformer(nn.Module):
     '''
-    Provides abstraction for encoder to decoder architecture,
-    Encoder takes input (batch, sentence_length), projects to embedding space then outputs 
-    a continuous representation (batch, sentence_length, embed_size)
-    Decoder takes encoder input, generates output at each step via auto-regressive pattern
-    Generator includes a linear projection of decoder output and map to output probability distribution across target
-    total vocabulary space
+    This class uses the pre-built transformer api provided by PyTorch
     '''
-    def __init__(self, vocab, dim_model, n_heads, N=2):
-        super(Transformer, self).__init__()
+
+    def __init__(self, vocab, dim_model, n_heads, N=6):
+        super(TorchTransformer, self).__init__()
         self.vocab = vocab
         self.dim_model = dim_model
         self.n_heads = n_heads
@@ -32,40 +30,47 @@ class Transformer(nn.Module):
 
         self.device = self.get_device
 
-        self.encoder = Encoder(self.dim_model, len(self.vocab.src), self.number_layer)
-        self.decoder = Decoder(self.dim_model, len(self.vocab.tgt), self.number_layer)
         self.generator = Generator(self.dim_model, len(self.vocab.tgt))
 
-    def forward(self, src, tgt):
-        '''
-        Take a mini-batch of source and target sentences, compute the log-likelihood of target sentences under the
-        language model learned by the transformer network
-        @returns scores (Tensor): a variable/tensor of shape (batch_size, ) representing the log-likelihood of generating
-        the gold-standard target sentence for each example in the input batch.
-        '''
+        self.enc_embed = nn.Embedding(len(self.vocab.src), self.dim_model)
+        self.pos_encoder = PositionalEmbedding(self.dim_model, 10000)
 
+        self.dec_embed = nn.Embedding(len(self.vocab.tgt), self.dim_model)
+        self.pos_decoder = PositionalEmbedding(self.dim_model, 10000)
+        self.torchTransformer = nn.Transformer(d_model=self.dim_model, nhead=self.n_heads, num_encoder_layers=N, num_decoder_layers=N, dim_feedforward=self.dim_model, dropout=0.1, activation='relu')
+
+
+    def forward(self, src, tgt):
         source_padded = self.vocab.src.to_input_tensor(src, device=self.device)   # Tensor: (sen_len, batch_size )
-        source_padded = source_padded.permute(1, 0)
-        src_mask = generate_src_masks(source_padded, self.vocab.src['<pad>'])
-        encoder_output = self.encoder(source_padded, src_mask) # Tensor: (batch_size, src_len, dim_model)
+        src_mask = generate_pad_mask(source_padded)
 
         target_train_padded = self.vocab.tgt.to_input_tensor(tgt, device=self.device)
-        target_padded = target_train_padded.permute(1, 0)  # Tensor: (batch_size, sen_len)
 
-        target_mask = generate_tgt_masks(target_padded, self.vocab.tgt['<pad>'])
-        decoder_output = self.decoder(target_padded, encoder_output, src_mask, target_mask)
+        tgt_pad_mask = generate_pad_mask(target_train_padded)
+        tgt_square_mask = generate_square_subsequent_mask(target_train_padded.size(0))
 
-        final_output = self.generator(decoder_output)  # (batch_size, tgt_length, tgt_vocab_size)
+        if torch.cuda.is_available():
+            src_input = self.enc_embed(source_padded.permute(1, 0)).cuda()
+            tgt_input = self.dec_embed(target_train_padded.permute(1, 0)).cuda()
+        else:
+            src_input = self.enc_embed(source_padded.permute(1, 0))
+            tgt_input = self.dec_embed(target_train_padded.permute(1, 0))
+
+        src_input = self.pos_encoder(src_input)
+        tgt_input = self.pos_decoder(tgt_input)
+
+        output = self.torchTransformer(src_input.permute(1, 0, 2), tgt_input.permute(1, 0, 2), src_mask=None, tgt_mask=tgt_square_mask,
+                                    memory_mask=None, src_key_padding_mask=src_mask, tgt_key_padding_mask=tgt_pad_mask,
+                                    memory_key_padding_mask=src_mask)
+        output = self.generator(output)
 
         # Test print
-        #_, words = torch.max(final_output[-1], dim=-1)
+        #_, words = torch.max(output.permute(1, 0, 2)[-1], dim=-1)
         #print(words.shape)
         #words_to_print = [self.vocab.tgt.id2word[i] for i in words.squeeze().tolist()]
         #print("Sample predicted sentence: ", words_to_print)
 
-        final_output = final_output.permute(1, 0, 2) # (sentence_len, batch_size, vocab_size)
-
-        return final_output
+        return output
 
 
 
@@ -76,13 +81,12 @@ class Transformer(nn.Module):
         print('save model parameters to [%s]' % path, file=sys.stderr)
 
         params = {
-            'args': dict(dim_model=self.dim_model, n_heads=self.n_heads,  N=self.number_layer),
+            'args': dict(dim_model=self.dim_model, n_heads=self.n_heads, N=self.number_layer),
             'vocab': self.vocab,
             'state_dict': self.state_dict()
         }
 
         torch.save(params, path)
-
 
     @staticmethod
     def load(model_path: str):
@@ -91,7 +95,7 @@ class Transformer(nn.Module):
         """
         params = torch.load(model_path, map_location=lambda storage, loc: storage)
         args = params['args']
-        model = Transformer(vocab=params['vocab'], **args)
+        model = TorchTransformer(vocab=params['vocab'], **args)
         model.load_state_dict(params['state_dict'])
 
         return model
@@ -111,25 +115,25 @@ class Transformer(nn.Module):
             print('Cached:   ', round(torch.cuda.memory_cached(0) / 1024 ** 3, 1), 'GB')
         return device
 
-
     def greedy_decoding(self, src_sent, max_decoding_time_step):
         '''
         Given a source sentence, perform greedy decode algorithm to yield output sequence in the target language
         @param src_sent: lis[str], one sentence to decide
         '''
-        #src_mask = (src_sent != input_pad).unsqueeze(-2)
+        # src_mask = (src_sent != input_pad).unsqueeze(-2)
         word_ids = self.vocab.src.words2indices(src_sent)
 
-        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(0)  # Tensor: (batch_size, sent_length )
+        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(
+            0)  # Tensor: (batch_size, sent_length )
 
         enc_outputs = self.encoder(source_tensor, None)
-        #print("encoder output: ", enc_outputs.shape)
+        # print("encoder output: ", enc_outputs.shape)
 
         target_output = []
         target_output.append('<s>')
         for i in range(1, max_decoding_time_step):
-            
-            tgt_mask = np.triu(np.ones((1, i, i)),k=1).astype('uint8')
+
+            tgt_mask = np.triu(np.ones((1, i, i)), k=1).astype('uint8')
             if torch.cuda.is_available():
                 tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0).cuda()  # For GPU
             else:
@@ -140,13 +144,13 @@ class Transformer(nn.Module):
             tgt_word_ids = self.vocab.tgt.words2indices(current_output)
             target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device).unsqueeze(0)
             print("target tensor shape: ", target_tensor.shape)
-            
-            #print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
+
+            # print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
             decoder_output = self.decoder(target_tensor, enc_outputs, None, tgt_mask)
             output_dist = self.generator(decoder_output)
             prediction = output_dist[:, -1, :]  # (batch_size, 1, vocab_size)
-            #output_dist = torch.nn.functional.log_softmax(prediction, dim=-1)
-            #print("decoder out: ", output_dist.shape)
+            # output_dist = torch.nn.functional.log_softmax(prediction, dim=-1)
+            # print("decoder out: ", output_dist.shape)
 
             _, next_word = torch.max(prediction, dim=-1)
             print("next word: ", next_word)
@@ -155,15 +159,15 @@ class Transformer(nn.Module):
             if next_word_id == self.vocab.tgt.word2id['</s>']:
                 break
         print(target_output)
-        #target_output_extraction = [self.vocab.tgt.id2word[ix] for ix in target_output]
+        # target_output_extraction = [self.vocab.tgt.id2word[ix] for ix in target_output]
         # Due to greedy decoding, only 1 hypothesis will be generated thus the score is equal to 1
         # Score value will vary in the case of beam search decoding
         hypothesis = Hypothesis(value=target_output, score=1)
-        
+
         return [hypothesis]
 
-
-    def beam_search(self, src_sent: List[str], beam_size: int=5, max_decoding_time_step: int=70) -> List[Hypothesis]:
+    def beam_search(self, src_sent: List[str], beam_size: int = 5, max_decoding_time_step: int = 70) -> List[
+        Hypothesis]:
         """ Given a single source sentence, perform beam search, yielding translations in the target language.
         @param src_sent (List[str]): a single source sentence (words)
         @param beam_size (int): beam size
@@ -173,7 +177,8 @@ class Transformer(nn.Module):
                 score: float: the log-likelihood of the target sentence
         """
         word_ids = self.vocab.src.words2indices(src_sent)
-        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(0)  # Tensor: (batch_size, sent_length )
+        source_tensor = torch.tensor(word_ids, dtype=torch.long, device=self.device).unsqueeze(
+            0)  # Tensor: (batch_size, sent_length )
 
         enc_outputs = self.encoder(source_tensor, None)
 
@@ -190,8 +195,8 @@ class Transformer(nn.Module):
             hyp_num = len(hypotheses)
             print(hypotheses)
             exp_enc_outputs = enc_outputs.expand(hyp_num,
-                                                     enc_outputs.size(1),
-                                                     enc_outputs.size(2))
+                                                 enc_outputs.size(1),
+                                                 enc_outputs.size(2))
 
             tgt_mask = np.triu(np.ones((1, t, t)), k=1).astype('uint8')
             if torch.cuda.is_available():
@@ -199,11 +204,9 @@ class Transformer(nn.Module):
             else:
                 tgt_mask = torch.autograd.Variable(torch.from_numpy(tgt_mask) == 0)  # For CPU
 
-            #current_output = target_output[:t]
+            # current_output = target_output[:t]
             tgt_word_ids = [self.vocab.tgt.words2indices(hyp) for hyp in hypotheses]
             target_tensor = torch.tensor(tgt_word_ids, dtype=torch.long, device=self.device)
-
-
 
             print(target_tensor.shape)  # Tensor: (batch_size, sent_length )
             print(exp_enc_outputs.shape)  # Tensor: (batch_size, sent_length )
@@ -213,8 +216,8 @@ class Transformer(nn.Module):
             print(prediction.shape)
 
             # log probabilities over target words
-            #log_p_t = torch.nn.functional.log_softmax(output, dim=-1)
-            #log_p_t = prediction.permute(1, 0, 2)
+            # log_p_t = torch.nn.functional.log_softmax(output, dim=-1)
+            # log_p_t = prediction.permute(1, 0, 2)
 
             live_hyp_num = beam_size - len(completed_hypotheses)
             contiuating_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(prediction) + prediction).view(-1)

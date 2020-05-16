@@ -53,6 +53,7 @@ from tqdm import tqdm
 from utility import read_corpus, batch_iter
 from vocab import Vocab, VocabEntry
 from Transformer_model.transformer import Transformer
+from Transformer_model.torchTransformer import TorchTransformer
 
 import torch
 import torch.nn as nn
@@ -92,15 +93,20 @@ def evaluate_ppl(model, dev_data, vocab, device, batch_size=32):
             print("Sample predicted sentence: ", words_to_print)
 
             vocab_size = prediction.shape[-1]
-            # Compare Tensor (sen_len * batch_size, vocab_size) with (sen_len*batch_size)
-            loss = torch.nn.functional.cross_entropy(prediction.view(-1, vocab_size), tgt_real_value.view(-1), ignore_index=vocab.tgt.word2id['<pad>'])
 
+            # Generate LOSS
+            log_pred = torch.nn.functional.log_softmax(prediction, dim=-1)
+            tgt_real_value = vocab.tgt.to_input_tensor(tgt_real, device=device)
+            target_to_val_pad_masks = (tgt_real_value != vocab.tgt.word2id['<pad>']).float()
+            # Compute log probability of generating true target words
+            target_gold_words_log_prob = torch.gather(log_pred, index=tgt_real_value.unsqueeze(-1), dim=-1).squeeze(-1) * target_to_val_pad_masks
+            batch_loss_scores = target_gold_words_log_prob.sum(dim=0)
 
-            cum_loss += loss.item()
+            cum_loss += (-batch_loss_scores).sum()
             tgt_word_num_to_predict = sum(len(s[1:]) for s in tgt_sents)  # omitting leading `<s>`
             cum_tgt_words += tgt_word_num_to_predict
 
-        ppl = np.exp(cum_loss / cum_tgt_words)
+        ppl = math.exp(cum_loss / cum_tgt_words)
 
     if was_training:
         model.train()
@@ -138,7 +144,7 @@ def train(args: Dict):
     #train_batch_size = int(args['--batch-size'])
     #valid_niter = int(args['--valid-niter'])
     train_batch_size = 2
-    valid_niter = 500
+    valid_niter = 2000
     clip_grad = float(args['--clip-grad'])
     log_every = int(args['--log-every'])
     model_save_path = args['--save-to']
@@ -149,7 +155,9 @@ def train(args: Dict):
     device = torch.device("cuda:0" if args['--cuda'] else "cpu")
     print('use device: %s' % device, file=sys.stderr)
 
-    model = Transformer(vocab=vocab, dim_model=256, n_heads=8)
+    # Init the transformer instance
+    #model = Transformer(vocab=vocab, dim_model=256, n_heads=8)   # Native transformer class
+    model = TorchTransformer(vocab=vocab, dim_model=256, n_heads=8)  # uses torch transformer api
 
     model.train()
 
@@ -158,9 +166,6 @@ def train(args: Dict):
         print('uniformly initialize parameters [-%f, +%f]' % (uniform_init, uniform_init), file=sys.stderr)
         for p in model.parameters():
             p.data.uniform_(-uniform_init, uniform_init)
-
-    #vocab_mask = torch.ones(len(vocab.tgt))
-    #vocab_mask[vocab.tgt['<pad>']] = 0
 
     model = model.to(device)
 
@@ -208,11 +213,6 @@ def train(args: Dict):
 
             tgt_input = [ i[:-1] for i in tgt_sents]
             tgt_real = [ i[1:] for i in tgt_sents ]
-            #print(tgt_input)
-            print(tgt_real)
-
-
-            #tgt_real_value = tgt_real_value.permute(1, 0) # (batch_size, tgt_sentence )
 
             prediction = model(src_sents, tgt_input) # (tgt_sentence, batch_size, tgt_vocab_size)
 
@@ -223,20 +223,10 @@ def train(args: Dict):
             # Compute log probability of generating true target words
             target_gold_words_log_prob = torch.gather(log_pred, index=tgt_real_value.unsqueeze(-1), dim=-1).squeeze(-1) * target_to_val_pad_masks
             batch_loss_scores = target_gold_words_log_prob.sum(dim=0)
-            
-            #output_dim = prediction.shape[-1]
-            #print("prediction shape: ", prediction.view(-1, output_dim).shape)
-            #print(tgt_real_value.view(-1, 1).shape)
 
-            #loss = torch.nn.functional.cross_entropy(prediction.permute(0, 2, 1), tgt_real_value, ignore_index=vocab.tgt.word2id['<pad>'])
-            #loss = criterion(prediction.view(-1, output_dim), tgt_real_value.view(-1, 1).squeeze(1))
-            #print(loss)
             batch_loss = (-batch_loss_scores).sum()
             loss = batch_loss / batch_size
-            #print("tgt real value shape: ", tgt_real_value.shape)
 
-
-            #loss = torch.nn.functional.cross_entropy(prediction.permute(0, 2, 1), tgt_real_value, ignore_index=0)
             loss.backward()
 
             # clip gradient
@@ -378,8 +368,8 @@ def beam_search(model: Transformer, test_data_src: List[List[str]], beam_size: i
     hypotheses = []
     with torch.no_grad():
         for src_sent in tqdm(test_data_src, desc='Decoding', file=sys.stdout):
-            #example_hyps = model.beam_search(src_sent, beam_size=beam_size, max_decoding_time_step=max_decoding_time_step)
-            example_hyps = model.greedy_decoding(src_sent, max_decoding_time_step=max_decoding_time_step)
+            example_hyps = model.beam_search(src_sent, beam_size=beam_size, max_decoding_time_step=max_decoding_time_step)
+            #example_hyps = model.greedy_decoding(src_sent, max_decoding_time_step=max_decoding_time_step)
             hypotheses.append(example_hyps)
 
     if was_training: model.train(was_training)
