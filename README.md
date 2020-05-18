@@ -3,22 +3,25 @@ Note: Heavily inspired by the research paper attention is all you need : https:/
 
 Debrief my 2 weeks journey of exploring transformer
 
-[Go to Introduction](#introduction)
-[Go to implementation](#implementation)
-[Go to lessons](#lessons)
-[Go to things learnt](#thingslearnt)
-[Go to next step](#nextstep)
+[Introduction](#-introduction-and-motivation)
 
-**1: Introduction and motivation**
-#introduction
+[Implementation](#-implementation-process)
+
+[Challenges](#-challenges-mistakes-lessons)
+
+[Things learnt](#-things-I-did-not-know-before-but-Im-glad-I-do-now)
+
+[Next step](#-next-step)
+
+
+# introduction and motivation
 When I was a little kid, the one day I look forward to the most within a year is my birthday, because my dad would take me to this aeroplane model shop and let me pick any plane model I like to be my present. I still remember the joy and excitement taking home my first F-14 jet model to assemble, but not so much about the 2 hour commute and 6 total switches on transit bus. Compare to more than 2 decades ago, we live in a quite different world now where things no longer come that difficult. But how often do we slowed down out steps and ponder about what was actually important to us as human but could easily left out when things around us are fast and accessible.
 
 It is no different in the world of machine learning community known for being open source, starting from things as simple as a linear regression, to models as formidable as BERT or XLNet that can include millions, billions of parameters, can all be called with a single line of code using imported library to fit our data for prediction. This has no doubt attracted a wider range of users to apply these technologies on all sorts of interesting problems, but how many remains with the curiosity to explore the underlying theory and details of how these algorithm actually work when the understanding of the model can be highly abstracted without affecting its usability ? Is it actually worth the time to unveil the implementation detail of a transformer model and how much value can you get out of that?
 
 Looking back on this journey of uncovering the mystery of transformer, it isn't smooth at all, for many day and nights I left my Ubuntu and GPU on just for training the model however the result was often disappointing. I started feeling frustrated and began doubt, questioning myself if all these effort and time I put in is worth it. In the end, despite the suffer, I do not regret at all because I was able to gain some priceless lessons that I did not know or even think about before. I hope to distribute away the mistakes and challenges I ran into to help the community.
 
-**2: Implementation process**
-#implementation
+# implementation process
 After reading, in my opinion, one of the best papers written: Attention is all you need, I&#39;ve broken down the implementation into several parts. 1: The embedding layer. 2: The attention components. 3: The encoder and decoder components. 4: The train and evaluation environment to bring the model and dataset in. Putting these things together will give me a complete program to train and run transformer model on my English to Spanish translation dataset.
 
 2.1: Starter code package
@@ -61,8 +64,7 @@ I do not recall the original paper mention about adding dropout regularization, 
 
 ![](img/encoder_decoder.png)
 
-**3: Challenges, Mistakes, lessons**
-#lessons
+# Challenges Mistakes Lessons
 3.1: Underestimating the importance of having a good GPU for such on-prem deep learning development is probably my biggest mistake. While transformer replaced the recurrence relation with self attention to allow parallel training process and longer range dependency capture, it also increased the total number of parameters to train depending on the number of stacked transformer layer, dimension of the hidden space and the number of splitting attention head. My GeForce GTX 750 Ti has served me very well even for my YOLO v3 project, however it has finally crumbled in front of the might of transformer and I can not fit even 1 batch of sentence into the GPU memory. To barely get the training kicking off, I had to lower the hidden dimension from 512 to 256, and the transformer layer from 6 to 2. At the cost of model going underfit my training data and is basically un-usable. This gave me the motivation to finally bite the bullet and ordered from CanadaComputer that dream graphics card I&#39;ve been always wanting: RTX 2070 Super.
 
 3.2: Early stage testing is more important than I thought, as soon as I set up my environment and the embedding pieces, I should&#39;ve tested it with pre-built pytorch transformer API to see what I am expecting to get out of my data and hardware. One of the things I find that happens quite often but are difficult to troubleshoot is when model performed good in training, but very bad in inference. During my experiment I&#39;ve made a few implementation mistakes causing the training loss closed to almost zero, however after fixing, my model still couldn&#39;t perform up to expectation. Now I know that it&#39;s because I did not have the good GPU to unleash the full potential of a transformer model but I wish I had found this out earlier by swapping my implementation with a native torch transformer and compared the results.
@@ -71,8 +73,7 @@ I do not recall the original paper mention about adding dropout regularization, 
 
 3.4: Last but not the least, having a structured class name and spell check is more important than you think. There was a time when the training was able to run, however the training loss became very huge and fail to converge even with learning rate decay, I spent about 3 days digging through my code and scratching my head trying to figure out where went wrong. And eventually the bug turnt out to be in the decoder, I swapped the positional embedding with position wise feedforward in my decoder&#39;s input layer that messed up everything. Changing this resulted in the correct training, but I spent 3 days on digging this, 3 days !
 
-**4: Things I did not know before, but I'm glad I do now**
-#thingslearnt
+# Things I did not know before but Im glad I do now
 4.1: Positional embedding should be registered as buffer in torch once it is initialized, it should not be set up as trainable parameters. Also when constructing the matrix, it should be declared not based on batch input&#39;s longest length, but rather an absolute larger length, eg 10000, and then cut back down based on input length criteria. For more details on intuition behind positional embedding, I recommend this read: [https://kazemnejad.com/blog/transformer\_architecture\_positional\_encoding/](https://kazemnejad.com/blog/transformer_architecture_positional_encoding/)
 
 4.2: How important getting the right mask to encoder and decoder can be to a successful implementation of transformer. There&#39;re 2 types of masks in transformer model, one is a padding mask to hide the padding in the input so that when calculating the softmax regression in multi-head attention, those padding token will not be taken into consideration. Padding mask is applicable to both encoder and decoder output. There is another type of mask called attention mask. This is often a square matrix mask of shape (sentence length, sentence length) and is used when performing masked self-attention on transformer decoder to stop any word from attending to the future words and leaking the information. Otherwise during training, since information across the entire target sentence is available to the decoder, it would know to predict by always looking at the next word. One useful function to generating such mask is to use the upper triangular matrix function: triu. This is available in both torch, and numpy. It is in a form of square matrix because after the similarity score step, the tensor is of shape ( batch size, number of heads, sentence length, sentence length ), that's when the mask is applied before taking the multiplication of this tensor to the value tensor. 
@@ -81,8 +82,7 @@ I do not recall the original paper mention about adding dropout regularization, 
 
 4.4: For seq2seq translation, one reason behind model doing super well during training but horrible during inference could be because the input embedding is randomly initialized and allows back propagation into them to change rather than using a fixed and frozen pre-train embedding such as GloVe, or ELMo. This is because during inference time, there'll always be the risk of running into unknown words when parsing the source context that the model has never seen before in its training source data, that's why it won't generalize well during inference time. 
 
-**5: What is the next step:**
-#nextstep
+# next step
 Short term goal is to resume model training after my RTX is arrived and mounted, I&#39;m expecting a performance boost after it allows me to fit the entire 512 dimension of hidden size, the entire 8 attention heads, as well as increased batch size to train. Another improvement is to replace the trainable input embedding with fixed pre-train word level embeddings. 
 
 I&#39;m also planning on moving to my next project journey which is to explore span based question answering system with pre-trained BERT or XLNet and then go through manual tweaking for result fine tune. It&#39;s going to be a fun and interesting project.
