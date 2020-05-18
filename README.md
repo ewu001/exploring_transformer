@@ -3,18 +3,18 @@ Note: Heavily inspired by the research paper attention is all you need : https:/
 
 Debrief my 2 weeks journey of exploring transformer
 
-[Introduction](#-introduction-and-motivation)
+[Introduction](#introduction-and-motivation)
 
-[Implementation](#-implementation-process)
+[Implementation](#implementation-process)
 
-[Challenges](#-challenges-mistakes-lessons)
+[Challenges](#challenges-mistakes-lessons)
 
-[Things learnt](#-things-I-did-not-know-before-but-Im-glad-I-do-now)
+[Things learnt](#things-I-did-not-know-before-but-Im-glad-I-do-now)
 
-[Next step](#-next-step)
+[Next step](#next-step)
 
 
-# introduction and motivation
+# Introduction and motivation
 When I was a little kid, the one day I look forward to the most within a year is my birthday, because my dad would take me to this aeroplane model shop and let me pick any plane model I like to be my present. I still remember the joy and excitement taking home my first F-14 jet model to assemble, but not so much about the 2 hour commute and 6 total switches on transit bus. Compare to more than 2 decades ago, we live in a quite different world now where things no longer come that difficult. But how often do we slowed down out steps and ponder about what was actually important to us as human but could easily left out when things around us are fast and accessible.
 
 It is no different in the world of machine learning community known for being open source, starting from things as simple as a linear regression, to models as formidable as BERT or XLNet that can include millions, billions of parameters, can all be called with a single line of code using imported library to fit our data for prediction. This has no doubt attracted a wider range of users to apply these technologies on all sorts of interesting problems, but how many remains with the curiosity to explore the underlying theory and details of how these algorithm actually work when the understanding of the model can be highly abstracted without affecting its usability ? Is it actually worth the time to unveil the implementation detail of a transformer model and how much value can you get out of that?
