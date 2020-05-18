@@ -29,9 +29,9 @@ Transformer uses multi-head attention with mask which we&#39;ll cover in detail 
 
 The equation of doing so relies on trigonometry functions sine and cosine since they&#39;re periodic functions. The idea is to construct a positional embedding matrix with the exact same shape as the input embedding matrix and concatenating them together to form the input tensor that goes into the transformer encoder, or decoder.
 
-![](RackMultipart20200518-4-c5rvmk_html_795e50181ae71213.png)
+![](img/PE_equation.png)
 
-![](RackMultipart20200518-4-c5rvmk_html_27024cc2efa25bfe.png)
+![](img/PE_visual.png)
 
 2.3: Attention inside transformer
 
@@ -39,11 +39,11 @@ It could take an entire report to introduce the attention mechanism used in tran
 
 In the case of self attention, since Q, K and V includes information of the entire input, transformer requires an attention mask here to prevent its input self attends to other inputs that&#39;re not applicable. In the case of encoder, this mask serves the purpose of a padding mask to zero out input positions that are just paddings. In the case of decoder, this mask serves both as padding mask, also as an attention mask to stop decoding input from seeing its future when predicting the next word ( prevent decoder cheating ).
 
-![](RackMultipart20200518-4-c5rvmk_html_7ee0e1f4f862bfcc.png) ![](RackMultipart20200518-4-c5rvmk_html_454e6d4a12437b1a.png)
+![](img/scaled_dotproduct_attention_visual.png) ![](img/attention_equation.png)
 
 Multi-head attention sounds difficult but it&#39;s intuitively simple. After taking the query, key and value as input tensor of shape: ( batch\_size, sentence length, hidden dimension ), first linearly project each onto its projection space, and second, break the last dimension of the tensor into K number of heads and send to scaled dot product attention to compute output. What this looks like is for example, the Query projection is of shape ( batch=2, sentence\_length=20, hidden\_dim=256 ), then after spliting into 8 heads, this tensor will turn into ( batch=2, sentence\_length=20, number\_heads=8, head\_hidden\_dim=32 ) and of course, the sentence\_length and number of heads dimension are required to swap. Last is to concatenate the attention output of multiple heads into a single tensor then go through an output linear projection layer to obtain attention layer output.
 
-![](RackMultipart20200518-4-c5rvmk_html_298762f3f037cbd2.png)
+![](img/multihead_attention.png)
 
 2.4: Transformer encoder and decoder:
 
@@ -53,7 +53,7 @@ The only point worth noting is probably when connecting the encoder to decoder a
 
 I do not recall the original paper mention about adding dropout regularization, during my experiment I noticed that adding dropout helped with reducing overfit to training data slightly that&#39;s why I added dropout in both the encoder and decoder while connecting the residual skip connection before doing the layer normalization.
 
-![](RackMultipart20200518-4-c5rvmk_html_d970c1052b9af28.png)
+![](img/encoder_decoder.png)
 
 **3: Challenges, Mistakes, lessons**
 
