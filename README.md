@@ -7,7 +7,7 @@ Debrief my 2 weeks journey of exploring transformer
 
 [Implementation](#implementation-process)
 
-[Challenges](#challenges-mistakes-lessons)
+[Challenges I ran into](#challenges-mistakes-lessons)
 
 [Things learnt](#things-I-did-not-know-before-but-Im-glad-I-do-now)
 
@@ -21,7 +21,7 @@ It is no different in the world of machine learning community known for being op
 
 Looking back on this journey of uncovering the mystery of transformer, it isn't smooth at all, for many day and nights I left my Ubuntu and GPU on just for training the model however the result was often disappointing. I started feeling frustrated and began doubt, questioning myself if all these effort and time I put in is worth it. In the end, despite the suffer, I do not regret at all because I was able to gain some priceless lessons that I did not know or even think about before. I hope to distribute away the mistakes and challenges I ran into to help the community.
 
-# implementation process
+# Implementation process
 After reading, in my opinion, one of the best papers written: Attention is all you need, I&#39;ve broken down the implementation into several parts. 1: The embedding layer. 2: The attention components. 3: The encoder and decoder components. 4: The train and evaluation environment to bring the model and dataset in. Putting these things together will give me a complete program to train and run transformer model on my English to Spanish translation dataset.
 
 2.1: Starter code package
@@ -82,7 +82,7 @@ I do not recall the original paper mention about adding dropout regularization, 
 
 4.4: For seq2seq translation, one reason behind model doing super well during training but horrible during inference could be because the input embedding is randomly initialized and allows back propagation into them to change rather than using a fixed and frozen pre-train embedding such as GloVe, or ELMo. This is because during inference time, there'll always be the risk of running into unknown words when parsing the source context that the model has never seen before in its training source data, that's why it won't generalize well during inference time. 
 
-# next step
+# Next step
 Short term goal is to resume model training after my RTX is arrived and mounted, I&#39;m expecting a performance boost after it allows me to fit the entire 512 dimension of hidden size, the entire 8 attention heads, as well as increased batch size to train. Another improvement is to replace the trainable input embedding with fixed pre-train word level embeddings. 
 
 I&#39;m also planning on moving to my next project journey which is to explore span based question answering system with pre-trained BERT or XLNet and then go through manual tweaking for result fine tune. It&#39;s going to be a fun and interesting project.
