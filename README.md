@@ -31,9 +31,7 @@ Transformer uses multi-head attention with mask which we&#39;ll cover in detail 
 
 The equation of doing so relies on trigonometry functions sine and cosine since they&#39;re periodic functions. The idea is to construct a positional embedding matrix with the exact same shape as the input embedding matrix and concatenating them together to form the input tensor that goes into the transformer encoder, or decoder.
 
-![](img/PE_equation.png)
-
-![](img/PE_visual.png)
+![](img/PE_equation.png) ![](img/PE_visual.png)
 
 2.3: Attention inside transformer
 
